@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrieren - Gastrofy</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container" style="max-width: 400px; margin-top: 5rem;">
+        <div class="card">
+            <h1>Konto erstellen</h1>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Starten Sie Ihr Restaurant-Projekt noch heute.</p>
+            
+            <div id="alert" class="alert alert-error hidden"></div>
+            <div id="success" class="alert alert-success hidden">Konto erstellt! <a href="index.html">Zum Login</a></div>
+
+            <form id="registerForm">
+                <div class="form-group">
+                    <label for="email">E-Mail Adresse</label>
+                    <input type="email" id="email" required placeholder="name@beispiel.de">
+                </div>
+                <div class="form-group">
+                    <label for="password">Passwort (min. 8 Zeichen)</label>
+                    <input type="password" id="password" required minlength="8" placeholder="••••••••">
+                </div>
+                <button type="submit" style="width: 100%;">Registrieren</button>
+            </form>
+
+            <p style="margin-top: 1.5rem; text-align: center; font-size: 0.875rem;">
+                Bereits ein Konto? <a href="index.html">Anmelden</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alert = document.getElementById('alert');
+            const success = document.getElementById('success');
+            alert.classList.add('hidden');
+            success.classList.add('hidden');
+
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const res = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    success.classList.remove('hidden');
+                    document.getElementById('registerForm').classList.add('hidden');
+                } else {
+                    alert.textContent = data.error || 'Registrierung fehlgeschlagen.';
+                    alert.classList.remove('hidden');
+                }
+            } catch (err) {
+                alert.textContent = 'Serverfehler.';
+                alert.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

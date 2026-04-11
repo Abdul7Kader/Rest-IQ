@@ -1,0 +1,194 @@
+Produktdefinition Restaurant-Plattform V1
+Stand: Entwurfsfassung
+Hinweis: Diese Datei ist eine fachliche und strategische Entwurfsfassung und keine Rechtsberatung. Vor echtem Go-live sollten Allgemeine Geschäftsbedingungen, Datenschutz, Impressum, Preisangaben und Haftungsregelungen durch eine qualifizierte juristische Prüfung fuer Deutschland kontrolliert werden.
+
+1. Ziel des Projekts
+Ich betreibe eine webbasierte Plattform, ueber die Restaurants ihre eigene einfache Speisekarten- und Informationsseite selbst konfigurieren und veroeffentlichen koennen.
+
+Das Produktmodell besteht aus zwei Stufen:
+1. Kostenlose Stufe
+2. Bezahlte Stufe
+
+Version 1 startet fachlich mit Fokus auf der kostenlosen Stufe. Beim spaeteren Go-live sollen jedoch beide Stufen vorhanden sein.
+
+2. Grundidee des Produkts
+Die Plattform ist kein Agenturservice und kein individueller Webentwicklungsauftrag. Sie ist ein standardisiertes Self-Service-System fuer Restaurants.
+
+Das Restaurant konfiguriert seine Seite selbst. Ich erstelle keine Inhalte fuer das Restaurant, pflege keine Speisekarten fuer das Restaurant und uebernehme keine laufende individuelle Betreuung.
+
+Mein Beitrag ist die Bereitstellung der Plattform, der Templates, der technischen Veroeffentlichung und in der bezahlten Stufe die werbefreie Darstellung sowie die Anbindung einer kundeneigenen Domain nach erfolgreicher Eingabe und technischer Zuordnung.
+
+3. Kostenlose Stufe
+3.1 Enthaltene Leistungen
+- Zugang zur Plattform zur eigenstaendigen Konfiguration der Restaurant-Seite
+- Nutzung eines Standard-Templates
+- Veroeffentlichung der vom Restaurant selbst konfigurierten Seite
+- Werbeeinblendungen auf der Seite
+- Spendenhinweis auf der Seite oder in deren Umfeld
+- Kostenlose URL auf Cloudflare Pages im Muster restaurantname-meinprojekt.pages.dev, sofern technisch so umgesetzt
+- Selbststaendige Verwaltung der Inhalte durch das Restaurant
+
+3.2 Eigenschaften der kostenlosen Stufe
+- Die kostenlose Stufe soll moeglichst automatisiert erstellt werden.
+- Das Restaurant soll nach Registrierung und Eingabe seiner Daten ohne manuellen Eingriff von mir eine Seite erstellen koennen.
+- Mein Projektname soll in der kostenlosen URL enthalten sein, wenn die technische Struktur dies zulaesst.
+- Es gibt keine kundeneigene Domain in der kostenlosen Stufe.
+
+3.3 Nicht enthalten in der kostenlosen Stufe
+- Keine werbefreie Darstellung
+- Keine individuelle Domain-Anbindung
+- Keine individuelle Designentwicklung
+- Keine inhaltliche Pflege durch mich
+- Kein Support gegenueber Domainanbietern
+- Keine manuelle Erstellung von Speisekarten oder Bildern
+- Keine individuelle Suchmaschinenoptimierung
+- Keine Zusage einer bestimmten Reichweite oder Auffindbarkeit
+
+4. Bezahlte Stufe
+4.1 Enthaltene Leistungen
+- Zugang zur Plattform fuer die Konfiguration der Restaurant-Seite
+- Veroeffentlichung der vom Restaurant selbst konfigurierten Seite
+- Abschaltung der Werbung
+- Kein Spendenhinweis auf der veroeffentlichten Seite
+- Professionellerer Auftritt gegenueber der kostenlosen Stufe
+- Option zur Nutzung einer kundeneigenen Domain nach erfolgreicher Eingabe und technischer Zuordnung
+- Nutzung zusaetzlicher oder hochwertigerer Templates oder Layoutoptionen, soweit im Produkt vorgesehen
+
+4.2 Geplante fachliche Unterschiede zur kostenlosen Stufe
+- Keine Werbung
+- Kein Spendenhinweis
+- Kundeneigene Domain moeglich
+- Hochwertigerer Auftritt
+- Optional zusaetzliche Darstellungsoptionen wie hochwertigere Menuekomponenten oder exklusive Layoutvarianten
+
+4.3 Geplante Preislogik
+Empfohlene Startlogik:
+- Jaehrliche Plattformgebuehr
+- Empfohlener Startpreis: 39 Euro pro Jahr
+
+Begruendung:
+Die Zahlung ist keine Spende, sondern eine entgeltliche Freischaltung fuer eine definierte Zusatzleistung, insbesondere werbefreie Darstellung, professionellerer Auftritt und Domain-Anbindung. Der Begriff Plattformgebuehr oder Jahresgebuehr ist sachlich sauberer als Spende.
+
+5. Domain-Modell
+5.1 Kostenlose Stufe
+- Die kostenlose URL wird durch meine Plattform bzw. den eingesetzten Gratis-Hostingdienst bereitgestellt.
+- Bevorzugtes Muster: restaurantname-meinprojekt.pages.dev
+- Der Kunde soll die kostenlose URL nicht bei einem externen Domainanbieter selbst kaufen oder registrieren muessen.
+
+5.2 Bezahlte Stufe
+- Der Kunde beschafft seine Domain selbst bei einem externen Domainanbieter.
+- Der Kauf erfolgt direkt auf der Webseite des Domainanbieters.
+- Meine Plattform kann den Kunden ueber einen Affiliate-Link dorthin weiterleiten.
+- Nach dem Kauf kehrt der Kunde zu meiner Plattform zurueck.
+- Der Kunde gibt seine Domain in meinem System ein.
+- Meine Plattform verbindet danach die konfigurierte Seite mit der kundeneigenen Domain, sofern die technischen Voraussetzungen erfuellt sind.
+
+5.3 Was ich beim Domain-Thema nicht uebernehme
+- Ich verkaufe die Domain nicht selbst.
+- Ich bin nicht Domaininhaber.
+- Ich registriere die Domain nicht im Namen des Kunden.
+- Ich uebernehme keine Zahlungen gegenueber dem Domainanbieter.
+- Ich uebernehme keine Verantwortung fuer Kauf, Verlangerung, Kuendigung, Transfer oder Vertragsbedingungen der Domain.
+
+6. Menue- und Inhaltsmodell
+Die Restaurant-Seite soll ein Menue enthalten, das in Kategorien strukturiert ist. Kategorien koennen je nach Template unterschiedlich dargestellt werden, zum Beispiel vertikal oder horizontal scrollbar.
+
+6.1 Datenstruktur fuer Menues
+Menue
+- besteht aus mehreren Kategorien
+
+Kategorie
+- Titel
+- Sortierung
+- Layouttyp, zum Beispiel vertikal oder horizontal scrollbar
+
+Gericht
+- Name
+- Preis
+- Bild
+- Beschreibung
+- Allergene
+- Zutaten
+- Sichtbarkeit
+
+6.2 Fachliche Empfehlung
+Allergene und Zutaten sollen nicht nur als Fliesstext in der Beschreibung versteckt werden, sondern als eigene Felder gespeichert werden. Dadurch bleibt die Datenstruktur spaeter leichter erweiterbar und besser darstellbar.
+
+7. Was der Kunde selbst machen muss
+- Registrierung auf meiner Plattform
+- Eingabe und Pflege aller Inhalte
+- Pruefung seiner Preise, Allergene, Zutaten, Oeffnungszeiten und sonstigen Angaben
+- Kauf seiner Domain bei einem externen Anbieter in der bezahlten Stufe
+- Eingabe der Domain in meiner Plattform
+- Einhaltung rechtlicher Pflichten fuer seine Inhalte
+
+8. Was ich leiste
+- Bereitstellung der Plattform
+- Bereitstellung der Templates
+- Technische Veroeffentlichung der von Kunden selbst konfigurierten Seiten
+- Werbeeinblendung und Spendenhinweis in der kostenlosen Stufe
+- Abschaltung der Werbung und des Spendenhinweises in der bezahlten Stufe
+- Technische Zuordnung einer kundeneigenen Domain in der bezahlten Stufe nach erfolgreicher Eingabe und technischer Umsetzbarkeit
+
+9. Wofuer ich Verantwortung uebernehmen sollte
+Dieser Abschnitt ist wichtig, weil nicht jede Verantwortung wirksam ausgeschlossen werden kann. Daher ist es besser, realistische und faire Verantwortungsbereiche klar zu benennen.
+
+Ich sollte Verantwortung uebernehmen fuer:
+- die Bereitstellung meiner Plattform im vereinbarten Umfang
+- die technisch korrekte Veroeffentlichung der vom Kunden im System gespeicherten Inhalte, soweit diese Inhalte ordnungsgemaess eingegeben wurden
+- die Abschaltung von Werbung und Spendenhinweis in der bezahlten Stufe, wenn diese Leistung gebucht wurde
+- die technische Domain-Zuordnung in meinem System, sobald der Kunde die Domain korrekt eingegeben hat und die technischen Voraussetzungen erfuellt sind
+- Fehler, die unmittelbar aus meiner eigenen Plattformlogik, meinem eigenen Code oder meiner eigenen fehlerhaften technischen Zuordnung entstehen
+- die sichere Behandlung von Kundenkonten, Zugangsdaten, Rollen und Systemzugriffen im Rahmen des technisch Zumutbaren
+- die Korrektur technischer Stoerungen, die ich selbst verursacht habe oder die im Kernbereich meiner Plattform liegen, soweit dies vertraglich als Plattformbetrieb zugesagt ist
+- gesetzlich nicht abdingbare Ansprueche, insbesondere in den Faellen, in denen Haftung nicht wirksam ausgeschlossen oder beschraenkt werden kann
+
+10. Wofuer ich keine Leistung verspreche
+- Keine inhaltliche Erstellung oder Pflege von Texten, Speisekarten, Preisen, Bildern, Allergenen, Zutaten oder Oeffnungszeiten
+- Keine inhaltliche oder rechtliche Pruefung der vom Kunden eingegebenen Daten
+- Keine Erstellung individueller Logos oder Markenauftritte
+- Keine Suchmaschinenoptimierung als Einzelleistung
+- Keine Betreuung gegenueber Domainanbietern
+- Keine Haftung fuer Stoerungen, die ausschliesslich durch den Domainanbieter, den DNS-Anbieter, den Browser des Kunden, das Endgeraet des Kunden oder sonstige Drittanbieter verursacht werden, soweit dies rechtlich zulaessig geregelt ist
+- Keine Garantie fuer Umsatz, Reichweite, Suchmaschinenranking oder Kundenanfragen
+- Keine ununterbrochene stoerungsfreie Verfuegbarkeit rund um die Uhr
+- Keine Agenturleistungen auf Abruf
+- Keine individuelle Beratung ohne gesonderte Vereinbarung
+
+11. Harte Leistungsgrenze der bezahlten Stufe
+1. Die bezahlte Stufe umfasst ausschliesslich den Zugang zur Konfigurationsplattform, die werbefreie Veroeffentlichung der vom Kunden selbst konfigurierten Website und die technische Anbindung einer vom Kunden selbst beschafften Domain nach erfolgreicher Eingabe und technischer Zuordnung.
+2. Der Kunde erstellt, pflegt und aktualisiert alle Inhalte selbst.
+3. Ich schulde keine inhaltliche Erstellung, Bearbeitung oder laufende Pflege von Speisekarten, Preisen, Bildern, Texten, Oeffnungszeiten, Allergenen oder sonstigen Angaben.
+4. Ich schulde keinen Kauf, keine Registrierung, keine Verlangerung, keinen Transfer und keine Verwaltung von Domains.
+5. Vertraege ueber Domains bestehen ausschliesslich zwischen dem Kunden und dem jeweiligen Domainanbieter.
+6. Ich schulde keine individuelle Designentwicklung, keine individuelle Suchmaschinenoptimierung und keine Agenturleistungen.
+7. Ich schulde keine bestimmte Reichweite, Auffindbarkeit oder wirtschaftliche Wirkung der veroeffentlichten Website.
+8. Ich schulde keine ununterbrochene Verfuegbarkeit der Plattform oder der Website.
+9. Gesetzlich nicht ausschliessbare Ansprueche bleiben unberuehrt.
+
+12. Empfehlung zur rechtlichen Umsetzung
+Vor dem Go-live sollten mindestens folgende Punkte juristisch geprueft oder sauber formuliert werden:
+- Allgemeine Geschaeftsbedingungen fuer B2B-Kunden
+- Leistungsbeschreibung der kostenlosen und bezahlten Stufe
+- Datenschutz und Auftragsverarbeitung, falls einschlaegig
+- Impressum
+- Preisangaben und Abrechnung
+- Klauseln zu Haftungsbegrenzung, soweit zulaessig
+- Regelung, dass Domainvertraege ausschliesslich zwischen Kunde und Domainanbieter bestehen
+
+13. Strategische Empfehlung fuer Version 1
+- Erst kostenlose Stufe fachlich und technisch sauber umsetzen
+- Danach bezahlte Stufe auf derselben Plattform aufbauen
+- Keine unnötige Komplexitaet durch n8n oder OpenClaw im Kern der ersten Version
+- Keine freie Website-Programmierung fuer Kunden, sondern klar gefuehrte Konfiguration
+- Domainkauf in der bezahlten Stufe extern beim Anbieter lassen
+- Kostenlose Stufe als automatisches Self-Service-System bauen
+- Bezahlte Stufe klar als Plattformgebuehr und nicht als Spende vermarkten
+
+14. Offene Punkte fuer die naechste Entscheidung
+- Exakte Auswahl der zusaetzlichen Premium-Template-Unterschiede
+- Ob horizontales Scroll-Menue exklusiv nur in der bezahlten Stufe enthalten ist
+- Exakte Preisfestlegung beim Go-live, zum Beispiel 39 Euro pro Jahr
+- Ob die bezahlte Stufe schon im ersten technischen Release sichtbar sein soll oder nur intern vorbereitet wird
+
+Ende der Entwurfsfassung

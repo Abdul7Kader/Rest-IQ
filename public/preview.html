@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vorschau - Gastrofy</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .preview-banner { position: fixed; top: 0; left: 0; right: 0; background: #1e293b; color: white; text-align: center; padding: 0.5rem; font-size: 0.8rem; z-index: 1000; }
+        body { padding-top: 2rem; background: #f1f5f9; }
+        .gastro-shell { background: white; min-height: 100vh; }
+    </style>
+</head>
+<body>
+    <div class="preview-banner">
+        VORSCHAU-MODUS (KOSTENLOSE VERSION) &nbsp; | &nbsp; <a href="/dashboard.html" style="color: #60a5fa; text-decoration: none;">Zurück zum Dashboard</a>
+    </div>
+
+    <div id="renderTarget">
+        <div style="padding: 5rem; text-align: center; color: var(--text-muted);">
+            Lade Vorschau...
+        </div>
+    </div>
+
+    <!-- Core Logic -->
+    <script src="/js/renderer.js"></script>
+    
+    <!-- Available Templates -->
+    <script src="/templates/free_default.js"></script>
+    <script src="/templates/free_classic.js"></script>
+
+    <script>
+        async function init() {
+            const urlParts = window.location.pathname.split('/');
+            const isAdminView = urlParts.includes('preview') && urlParts.length > 2;
+            const restaurantId = isAdminView ? urlParts[urlParts.length - 1] : null;
+
+            const apiUrl = isAdminView ? `/api/admin/preview/${restaurantId}` : '/api/preview';
+            
+            try {
+                const res = await fetch(apiUrl);
+                if (!res.ok) throw new Error('Vorschau-Daten konnten nicht geladen werden.');
+                const data = await res.json();
+                
+                const container = document.getElementById('renderTarget');
+                window.GastrofyRenderer.render(data, container);
+
+            } catch (err) {
+                document.getElementById('renderTarget').innerHTML = `
+                    <div class="container" style="padding-top: 5rem;">
+                        <div class="alert alert-error">
+                            <h1>Fehler</h1>
+                            <p>${err.message}</p>
+                            <a href="/index.html">Zum Login</a>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

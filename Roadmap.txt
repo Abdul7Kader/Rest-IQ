@@ -1,0 +1,148 @@
+Ja. Hier ist die angepasste Roadmap, in der Reihenfolge, die zu deinem Modell passt:
+	•	zuerst kostenlose Stufe bauen
+	•	danach bezahlte Stufe ergänzen
+	•	beim Go-live sind beide Stufen vorhanden
+Die Roadmap basiert auf diesen jetzt feststehenden technischen Rahmenbedingungen: Cloudflare Pages ist für die kostenlose Auslieferung geeignet, stellt pages.dev-Adressen bereit und ist auf allen Plänen verfügbar; der Free-Plan nennt 500 Deployments, also Veröffentlichungen, pro Monat. Eigene Domains können an ein Pages-Projekt angebunden werden; für eine Apex-Domain wie restaurant.de verlangt Cloudflare jedoch die Domain als Cloudflare-Zone mit Nameserver-Konfiguration, während dein Startmodell daher besser mit www.restaurant.de als Subdomain beginnt. Für Google AdSense müssen Sites geprüft werden, und für Werbung im Europäischen Wirtschaftsraum muss die Einwilligungslogik sauber abgebildet werden. Sensible Werbekategorien können eingeschränkt werden. (Cloudflare Docs)
+	1	Produktgrenzen endgültig einfrieren Ziel: Keine offenen Strategiefragen mehr, bevor Antigravity anfängt. Festzuhalten:
+	•	kostenlose Stufe: restaurantname-meinprojekt.pages.dev
+	•	Werbung und Spendenhinweis nur in kostenlos
+	•	bezahlte Stufe: keine Werbung, kein Spendenhinweis, eigene Domain des Kunden
+	•	der Kunde kauft die Domain extern
+	•	Start nur mit www.-Domainanbindung für die bezahlte Stufe
+	•	keine Bestellfunktion in Version 1
+Ergebnis: Ein finales fachliches Kurzpapier für Version 1.
+	2	Datenmodell definieren Ziel: Antigravity bekommt zuerst die Entitäten, nicht das Design. Objekte:
+	•	Benutzer
+	•	Restaurant
+	•	Tarif
+	•	Seitenkonfiguration
+	•	Menü
+	•	Menükategorie
+	•	Gericht
+	•	Bild
+	•	Veröffentlichungsstatus
+	•	eigene Domain für spätere bezahlte Stufe
+Wichtig:
+	•	Gericht hat getrennte Felder für Name, Preis, Bild, Beschreibung, Zutaten, Allergene
+	•	Menükategorie hat Layout-Typ: vertikal oder horizontal scrollbar
+	•	kostenlos und bezahlt nutzen dasselbe Datenmodell
+Ergebnis: Stabiles Grundgerüst für alle späteren Schritte.
+	3	Grundplattform und Anmeldung bauen Ziel: Restaurant kann sich registrieren, anmelden und seine eigene Seite verwalten. Umfang:
+	•	Registrierung
+	•	Login
+	•	Restaurant anlegen
+	•	internes Dashboard
+	•	Speichern der Grunddaten
+Ergebnis: Ein Benutzer kann in die Plattform hinein und hat einen klaren Bearbeitungsbereich.
+	4	Konfigurationsoberfläche für die kostenlose Stufe bauen Ziel: Das Restaurant kann seine Seite selbst konfigurieren. Umfang:
+	•	Restaurantdaten
+	•	Logo
+	•	Bilder
+	•	Öffnungszeiten
+	•	Beschreibung
+	•	Menükategorien
+	•	Gerichte
+	•	Farben oder kleine Designoptionen
+	•	Vorschau
+Ergebnis: Die Seite ist fachlich vollständig konfigurierbar.
+	5	Template-System bauen Ziel: Nicht freies Programmieren, sondern feste Templates mit Konfiguration. Umfang:
+	•	mindestens 1 sauberes Gratis-Template
+	•	Werbebereiche fest eingeplant
+	•	Spendenhinweis fest eingeplant
+	•	Menüdarstellung sauber und mobil nutzbar
+	•	horizontales Scrollen zunächst nur dann einbauen, wenn du es wirklich als Premium-Unterschied willst
+Ergebnis: Ein belastbares erstes Frontend-Template.
+	6	Veröffentlichungslogik für die kostenlose Stufe bauen Ziel: Aus den Konfigurationsdaten wird automatisch eine veröffentlichte Seite. Umfang:
+	•	Generierung statischer Seiten
+	•	Deployment zu Cloudflare Pages
+	•	kostenloses Adressmuster restaurantname-meinprojekt.pages.dev
+	•	erneute Veröffentlichung bei Änderungen
+Cloudflare Pages unterstützt Direct Upload und das Deployen vorgebauter Dateien direkt auf Pages. (Cloudflare Docs)
+Ergebnis: Die kostenlose Stufe ist technisch live-fähig.
+	7	Werbestruktur und Spendenhinweis einbauen Ziel: Die kostenlose Stufe ist monetarisierbar vorbereitet. Umfang:
+	•	feste Werbe-Slots im Template
+	•	Spendenhinweis in kostenlos
+	•	alles zentral per Tarif steuerbar
+	•	keine Werbung in bezahlt
+Wichtig: Noch nicht mehrere Werbenetzwerke einbauen. AdSense zuerst allein ist die sauberste Startvariante. Google erlaubt zwar grundsätzlich andere Netzwerke neben AdSense, aber für Version 1 erhöht das nur Komplexität. (Google Hilfe)
+Ergebnis: Die kostenlose Stufe hat eine klare Werbelogik.
+	8	Consent- und AdSense-Vorbereitung bauen Ziel: Werbung ab Version 1 rechtlich und technisch nicht chaotisch starten. Umfang:
+	•	Consent-Banner beziehungsweise Einwilligungslogik
+	•	AdSense-Site-Review vorbereiten
+	•	sensible Kategorien blockierbar machen
+	•	Werbeeinbindung so bauen, dass sie pro Seite aktivierbar ist
+Google verlangt Site-Review für AdSense-Sites; bei der Site-Einrichtung verweist Google auch auf die Auswahl einer Consent Management Platform, also einer Zustimmungsverwaltungsplattform. Für den Europäischen Wirtschaftsraum sind Consent-Anforderungen relevant. In AdSense können sensible Kategorien blockiert werden. (Google Hilfe)
+Ergebnis: Werbung ist in Version 1 nicht nur optisch, sondern real vorbereitbar.
+	9	Tariflogik bauen Ziel: Kostenlos und bezahlt sauber trennen. Umfang:
+	•	Tarifstatus speichern
+	•	Werbung an oder aus
+	•	Spendenhinweis an oder aus
+	•	bezahlte Templates oder Premium-Layout aktivierbar
+	•	Upgrade-Pfad vorbereiten
+Ergebnis: Das System kann beide Stufen fachlich unterscheiden.
+	10	Bezahlte Stufe bauen Ziel: Die bezahlte Version ist als Produkt nutzbar. Umfang:
+	•	keine Werbung
+	•	kein Spendenhinweis
+	•	professionellerer Auftritt
+	•	gegebenenfalls zusätzliche Template-Optionen
+	•	Jahresgebühr nur als fachlicher Zustand in der Software, Zahlungsabwicklung kann zunächst einfach vorbereitet werden
+Ergebnis: Die bezahlte Stufe ist visuell und funktional unterscheidbar.
+	11	Domain-Eingabe und Domain-Anbindung für bezahlt bauen Ziel: Kunde kann seine extern gekaufte Domain eingeben und nach Konfiguration online schalten. Umfang:
+	•	Feld für eigene Domain
+	•	Start in Version 1 mit www.restaurant.de
+	•	Domainstatus speichern
+	•	DNS, also Domain Name System, Anweisungen anzeigen
+	•	technische Prüfung, ob die Domain korrekt zeigt
+	•	nach Erfolg Veröffentlichung unter der Kundendomain
+Cloudflare Pages unterstützt Custom Domains; für Apex-Domains ist mehr nötig, deshalb ist www. für Version 1 der sauberere Start. (Cloudflare Docs)
+Ergebnis: Die bezahlte Stufe kann mit eigener Domain online gehen.
+	12	Admin-Bereich für dich bauen Ziel: Du kannst die Plattform betreiben. Umfang:
+	•	Restaurants sehen
+	•	Tarifstatus sehen
+	•	Veröffentlichungsstatus sehen
+	•	Seiten deaktivieren oder freigeben
+	•	Templates verwalten
+	•	Domainstatus sehen
+Ergebnis: Du hast operative Kontrolle.
+	13	Rechtstexte und Leistungsgrenzen in die Benutzeroberfläche einbauen Ziel: Keine falschen Erwartungen beim Kunden. Umfang:
+	•	kostenlose Stufe klar beschreiben
+	•	bezahlte Stufe klar beschreiben
+	•	ausdrücklich nicht enthalten:
+	◦	keine Inhaltsbearbeitung durch dich
+	◦	kein Domainkauf durch dich
+	◦	kein Drittanbieter-Support
+	◦	keine individuelle Pflege
+	◦	keine Agenturleistung
+Ergebnis: Das Produkt erklärt sich selbst und begrenzt Erwartungen.
+	14	Interne Testphase Ziel: Erst technisch stabil, dann öffentlich. Umfang:
+	•	1 bis 3 Testrestaurants
+	•	kompletter Durchlauf von Registrierung bis Veröffentlichung
+	•	Test der kostenlosen URL
+	•	Test der Werbeplätze
+	•	Test des Upgrades auf bezahlt
+	•	Test der www.-Domainanbindung
+Ergebnis: Reale Fehler vor dem Go-live finden.
+	15	Go-live Ziel: Öffentlicher Start mit beiden Stufen. Voraussetzung:
+	•	kostenlose Stufe vollständig live
+	•	bezahlte Stufe vollständig live
+	•	Domainflow für bezahlt funktioniert
+	•	Werbeeinbindung und Consent funktionieren
+	•	Admin-Bereich steht
+Reihenfolge für Antigravity
+Antigravity sollte die Bauteile in dieser Reihenfolge bekommen:
+	1	Datenmodell
+	2	Registrierung und Login
+	3	Restaurant-Dashboard
+	4	Menü- und Seitenkonfiguration
+	5	Template-System
+	6	Vorschau
+	7	kostenlose Veröffentlichung auf pages.dev
+	8	Werbeslots und Spendenhinweis
+	9	Consent und AdSense-Vorbereitung
+	10	Tariflogik
+	11	bezahlte Stufe
+	12	Domain-Eingabe und www.-Anbindung
+	13	Admin-Bereich
+Meine klare Empfehlung für den ersten Antigravity-Schritt: Nicht mit Werbung, nicht mit Cloudflare, nicht mit Design anfangen.
+Zuerst: Schritt 1 = Datenmodell und fachliche Entitäten.
+Wenn du willst, schreibe ich dir jetzt direkt die erste Antigravity-Anweisung für Schritt 1.

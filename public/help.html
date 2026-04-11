@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hilfe & Tutorials - Gastrofy</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .article-card { cursor: pointer; transition: transform 0.1s; }
+        .article-card:hover { border-color: var(--primary); transform: translateY(-2px); }
+        .markdown-content h1 { font-size: 1.5rem; margin-top: 1.5rem; }
+        .markdown-content p { margin-bottom: 1rem; }
+        .markdown-content ul { margin-left: 1.5rem; margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <strong>Hilfe & Tutorials</strong>
+            <a href="dashboard.html" id="backBtn">Zurück zum Dashboard</a>
+        </div>
+
+        <div id="listView">
+            <h1>Wie können wir helfen?</h1>
+            <div id="articleList" class="grid" style="margin-top: 2rem;">
+                <!-- Articles injected here -->
+            </div>
+        </div>
+
+        <div id="detailView" class="hidden">
+            <button class="secondary" onclick="showList()" style="margin-bottom: 2rem;">&larr; Alle Artikel</button>
+            <div class="card">
+                <div id="articleType" class="badge badge-free" style="margin-bottom: 1rem; display: inline-block;"></div>
+                <h1 id="articleTitle"></h1>
+                <div id="articleContent" class="markdown-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const listView = document.getElementById('listView');
+        const detailView = document.getElementById('detailView');
+
+        async function loadArticles() {
+            const res = await fetch('/api/help/articles');
+            const articles = await res.json();
+            const list = document.getElementById('articleList');
+            list.innerHTML = '';
+
+            articles.forEach(a => {
+                const card = document.createElement('div');
+                card.className = 'card article-card';
+                card.innerHTML = `
+                    <div class="badge badge-free" style="margin-bottom: 1rem;">${a.article_type.toUpperCase()}</div>
+                    <h3>${a.title}</h3>
+                    <p style="font-size: 0.875rem; color: var(--text-muted);">Erfahren Sie mehr über ${a.title.toLowerCase()}.</p>
+                `;
+                card.onclick = () => loadDetail(a.id);
+                list.appendChild(card);
+            });
+        }
+
+        async function loadDetail(id) {
+            const res = await fetch(`/api/help/articles/${id}`);
+            const article = await res.json();
+
+            document.getElementById('articleTitle').textContent = article.title;
+            document.getElementById('articleType').textContent = article.article_type.toUpperCase();
+            
+            // Simple Markdown-ish display (replaces \n with <br> and adds some basic styling)
+            // Real markdown library would be better, but keeping it "no excess" for now.
+            const content = article.content_markdown
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+                .replace(/\n/g, '<br>');
+            
+            document.getElementById('articleContent').innerHTML = content;
+
+            listView.classList.add('hidden');
+            detailView.classList.remove('hidden');
+        }
+
+        function showList() {
+            listView.classList.remove('hidden');
+            detailView.classList.add('hidden');
+        }
+
+        // Check if back button should go to Admin or Dashboard
+        async function checkBack() {
+            const res = await fetch('/api/auth/me');
+            const me = await res.json();
+            if (me.role === 'platform_admin') {
+                document.getElementById('backBtn').href = 'admin.html';
+                document.getElementById('backBtn').textContent = 'Zurück zum Admin-Bereich';
+            }
+        }
+
+        checkBack();
+        loadArticles();
+    </script>
+</body>
+</html>

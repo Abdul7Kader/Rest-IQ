@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Gastrofy</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container" style="max-width: 1000px;">
+        <div class="nav">
+            <strong>Gastrofy Platform Admin</strong>
+            <div>
+                <a href="#" id="logoutBtn">Abmelden</a>
+            </div>
+        </div>
+
+        <h1>Alle Restaurants</h1>
+        
+        <div class="card" style="padding: 0; overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead style="background: var(--bg); border-bottom: 1px solid var(--border);">
+                    <tr>
+                        <th style="padding: 1rem; text-align: left;">Restaurant Name</th>
+                        <th style="padding: 1rem; text-align: left;">Inhaber (Email)</th>
+                        <th style="padding: 1rem; text-align: left;">Tarif</th>
+                        <th style="padding: 1rem; text-align: left;">Status</th>
+                        <th style="padding: 1rem; text-align: left;">Erstellt am</th>
+                    </tr>
+                </thead>
+                <tbody id="restaurantTable">
+                    <!-- Rows will be injected here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadRestaurants() {
+            const res = await fetch('/api/admin/restaurants');
+            if (!res.ok) {
+                if (res.status === 403) alert('Zugriff verweigert (Admin-Rechte erforderlich)');
+                window.location.href = 'index.html';
+                return;
+            }
+            
+            const restaurants = await res.json();
+            const table = document.getElementById('restaurantTable');
+            table.innerHTML = '';
+
+            for (const r of restaurants) {
+                const tr = document.createElement('tr');
+                tr.style.borderBottom = '1px solid var(--border)';
+                tr.innerHTML = `
+                    <td style="padding: 1rem;"><strong>${r.restaurant_name}</strong><br><small style="color:var(--text-muted)">${r.public_slug_internal}</small></td>
+                    <td style="padding: 1rem;">${r.owner_email}</td>
+                    <td style="padding: 1rem;"><span class="badge badge-${r.current_plan}">${r.current_plan.toUpperCase()}</span></td>
+                    <td style="padding: 1rem;"><span style="color: ${r.is_active ? 'var(--success)' : 'var(--error)'}">${r.is_active ? 'Aktiv' : 'Inaktiv'}</span></td>
+                    <td style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">${new Date(r.created_at).toLocaleDateString()}</td>
+                `;
+                table.appendChild(tr);
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            await fetch('/api/auth/logout', { method: 'POST' });
+            window.location.href = 'index.html';
+        });
+
+        loadRestaurants();
+    </script>
+</body>
+</html>
