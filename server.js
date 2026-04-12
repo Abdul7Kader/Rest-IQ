@@ -405,6 +405,40 @@ app.get('/preview/:id', isAuthenticated, hasRole('platform_admin'), (req, res) =
     res.sendFile(path.join(__dirname, 'public', 'preview.html'));
 });
 
+// --- Publish API ---
+
+app.post('/api/restaurant/publish', isAuthenticated, (req, res) => {
+    const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const config = db.prepare('SELECT current_plan FROM site_configs WHERE restaurant_id = ?').get(restaurant.id);
+    if (config.current_plan !== 'free') {
+        return res.status(400).json({ error: 'Local publish is only supported for the free plan.' });
+    }
+
+    try {
+        const viewModel = getPreviewData(restaurant.id);
+        const { exportStaticSite } = require('./lib/publisher');
+        const exportPath = exportStaticSite(restaurant.public_slug_internal, viewModel);
+
+        const transaction = db.transaction(() => {
+            db.prepare('UPDATE site_configs SET is_published = 1, updated_at = CURRENT_TIMESTAMP WHERE restaurant_id = ?').run(restaurant.id);
+            db.prepare('INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, finished_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)')
+              .run(restaurant.id, 'manual_update', 'local_filesystem', 'success');
+        });
+        transaction();
+
+        res.json({ success: true, exportPath });
+    } catch (e) {
+        console.error('Publish error:', e);
+        try {
+            db.prepare('INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, message, finished_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)')
+              .run(restaurant.id, 'manual_update', 'local_filesystem', 'error', e.message);
+        } catch(logErr) { console.error('Failed to log error to publish_events', logErr); }
+        res.status(500).json({ error: 'Publish failed.', details: e.message });
+    }
+});
+
 // --- Admin Routes ---
 
 app.get('/api/admin/restaurants', isAuthenticated, hasRole('platform_admin'), (req, res) => {

@@ -32,7 +32,8 @@
             <li><a href="#" onclick="showTab('design')" id="nav-design">Design & Hero</a></li>
             <li><a href="#" onclick="showTab('help')" id="nav-help">Hilfe</a></li>
             <li style="margin-top: 2rem;"><a href="/preview" target="_blank" style="background: var(--primary); color: white;">Live Vorschau</a></li>
-            <li><a href="#" id="logoutBtn" style="color: var(--error);">Abmelden</a></li>
+            <li style="margin-top: 0.5rem;"><a href="#" id="publishBtn" style="background: var(--success); color: white;">Lokal Veröffentlichen</a></li>
+            <li style="margin-top: 1rem;"><a href="#" id="logoutBtn" style="color: var(--error);">Abmelden</a></li>
         </ul>
     </div>
 
@@ -339,6 +340,38 @@
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = 'index.html');
+        });
+
+        document.getElementById('publishBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            const btn = e.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Veröffentliche...';
+            
+            try {
+                const res = await fetch('/api/restaurant/publish', { method: 'POST' });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    const alert = document.getElementById('alert');
+                    alert.textContent = 'Erfolgreich veröffentlicht! ' + data.exportPath;
+                    alert.className = 'alert alert-success';
+                    alert.classList.remove('hidden');
+                } else {
+                    const alert = document.getElementById('alert');
+                    alert.textContent = data.error || 'Fehler beim Veröffentlichen.';
+                    alert.className = 'alert alert-error';
+                    alert.classList.remove('hidden');
+                }
+            } catch(err) {
+                const alert = document.getElementById('alert');
+                alert.textContent = 'Serverfehler beim Veröffentlichen.';
+                alert.className = 'alert alert-error';
+                alert.classList.remove('hidden');
+            }
+            
+            btn.textContent = originalText;
+            setTimeout(() => document.getElementById('alert').classList.add('hidden'), 8000);
         });
 
         init();

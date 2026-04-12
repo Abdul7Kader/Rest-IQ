@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trattoria Mario</title>
+    <link rel="stylesheet" href="./css/style.css">
+    <style>
+        body { background: #f1f5f9; }
+        .gastro-shell { background: white; min-height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="renderTarget">
+        <div style="padding: 5rem; text-align: center; color: var(--text-muted);">
+            Lade Inhalte...
+        </div>
+    </div>
+    
+    <!-- Renderer -->
+    <script src="./js/renderer.js"></script>
+    
+    <!-- Templates -->
+    <script src="./templates/free_default.js"></script>
+    <script src="./templates/free_classic.js"></script>
+    
+    <!-- Initialization -->
+    <script>
+        // Load data via fetch (requires local web server like 'npx serve' or Cloudflare Pages)
+        fetch('./data.json')
+            .then(res => res.json())
+            .then(data => {
+                document.title = data.restaurant.name;
+                window.GastrofyRenderer.render(data, document.getElementById('renderTarget'));
+            })
+            .catch(err => {
+                document.getElementById('renderTarget').innerHTML = '<div style="padding: 2rem; color: #ef4444; text-align: center;">Lokale Daten konnten nicht über fetch() geladen werden. Bitte starten Sie einen lokalen Webserver, wenn Sie die Datei direkt von der Festplatte öffnen (CORS-Einschränkung).</div>';
+                console.error(err);
+            });
+    </script>
+</body>
+</html>
