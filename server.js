@@ -374,8 +374,8 @@ function getPreviewData(restaurantId) {
         },
         flags: {
             isFree: c.current_plan === 'free',
-            adsEnabled: c.ads_enabled === 1,
-            donationHintEnabled: c.donation_hint_enabled === 1
+            adsEnabled: c.current_plan === 'free', // Derived correctly from plan
+            donationHintEnabled: c.current_plan === 'free' // Derived correctly from plan
         },
         meta: {
             previewMode: true,

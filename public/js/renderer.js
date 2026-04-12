@@ -37,17 +37,28 @@ const Renderer = {
     },
 
     /**
-     * Common component: Ad Placeholder
+     * Common component: Ad Slot
+     * @param {string} type Slot identifier (top_banner, in_content, footer_ad)
+     * @param {Object} flags View-Model flags
      */
     utils: {
-        adPlaceholder() {
+        adSlot(type, flags) {
+            if (!flags || !flags.adsEnabled) return '';
+            
+            const labels = {
+                top_banner: 'Top Banner Ad',
+                in_content: 'In-Content Ad',
+                footer_ad: 'Footer Ad'
+            };
+            
             return `
-                <div class="ad-placeholder" style="background: #f8fafc; border: 2px dashed #cbd5e1; color: #94a3b8; padding: 2rem; text-align: center; margin: 2rem 0; border-radius: 8px;">
-                    WERBUNG - PLATZHALTER (KOSTENLOSE VERSION)
+                <div class="ad-slot ad-slot-${type}" style="background: #f8fafc; border: 2px dashed #cbd5e1; color: #94a3b8; padding: 2rem; text-align: center; margin: 2rem 0; border-radius: 8px;">
+                    WERBUNG - ${labels[type] || 'PLATZHALTER'}
                 </div>
             `;
         },
-        donationHint() {
+        donationHint(flags) {
+            if (!flags || !flags.donationHintEnabled) return '';
             return `
                 <div class="donation-hint" style="background: #fff7ed; border: 1px solid #ffedd5; color: #9a3412; padding: 1rem; text-align: center; border-radius: 8px; margin-bottom: 2rem;">
                     <strong>Gefällt Ihnen dieses Restaurant?</strong> Unterstützen Sie die Gastrofy-Plattform mit einer kleinen Spende, damit wir lokale Restaurants weiterhin fördern können.

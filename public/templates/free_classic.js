@@ -16,7 +16,9 @@ window.free_classic = function(data) {
                 <p style="font-style: italic; font-size: 1.2rem; color: #444;">${siteConfig.hero.subtitle}</p>
             </header>
 
-            ${flags.donationHintEnabled ? utils.donationHint() : ''}
+            ${utils.adSlot('top_banner', flags)}
+
+            ${utils.donationHint(flags)}
 
             <div style="max-width: 700px; margin: 0 auto; padding: 3rem 1rem;">
                 <!-- About Centered -->
@@ -25,7 +27,7 @@ window.free_classic = function(data) {
                     <p style="line-height: 1.8; font-size: 1.1rem;">${siteConfig.aboutText || 'Wir freuen uns auf Ihren Besuch.'}</p>
                 </section>
 
-                ${flags.adsEnabled ? utils.adPlaceholder() : ''}
+                ${utils.adSlot('in_content', flags)}
 
                 <!-- Menu Centered -->
                 <section style="margin-bottom: 4rem;">
@@ -46,7 +48,7 @@ window.free_classic = function(data) {
                     `).join('')}
                 </section>
 
-                ${flags.adsEnabled ? utils.adPlaceholder() : ''}
+                ${utils.adSlot('footer_ad', flags)}
 
                 <!-- Info Blocks -->
                 <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 4rem;">

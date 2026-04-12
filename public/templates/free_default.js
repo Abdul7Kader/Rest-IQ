@@ -16,7 +16,9 @@ window.free_default = function(data) {
                 <p style="font-size: 1.25rem; color: var(--text-muted);">${siteConfig.hero.subtitle}</p>
             </div>
 
-            ${flags.donationHintEnabled ? utils.donationHint() : ''}
+            ${utils.adSlot('top_banner', flags)}
+
+            ${utils.donationHint(flags)}
 
             <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 3rem;">
                 <div>
@@ -25,7 +27,7 @@ window.free_default = function(data) {
                         <p>${siteConfig.aboutText || 'Willkommen in unserem Restaurant.'}</p>
                     </section>
 
-                    ${flags.adsEnabled ? utils.adPlaceholder() : ''}
+                    ${utils.adSlot('in_content', flags)}
 
                     <section>
                         <h2 style="color: var(--accent); margin-bottom: 2rem;">Unsere Speisekarte</h2>
@@ -65,7 +67,7 @@ window.free_default = function(data) {
                 </aside>
             </div>
 
-            ${flags.adsEnabled ? utils.adPlaceholder() : ''}
+            ${utils.adSlot('footer_ad', flags)}
             
             <footer style="margin-top: 5rem; padding: 2rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted);">
                 <p>${siteConfig.footerNote || ''}</p>
