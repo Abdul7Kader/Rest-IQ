@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const path = require('path');
 const db = require('./lib/db');
 const { hashPassword, verifyPassword, isAuthenticated, hasRole } = require('./lib/auth');
 
@@ -296,7 +297,7 @@ app.delete('/api/dishes/:id', isAuthenticated, (req, res) => {
 
 // --- Preview API ---
 
-function getPreviewData(restaurantId) {
+function getPreviewData(restaurantId, { previewMode = true } = {}) {
     const r = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurantId);
     const c = db.prepare('SELECT * FROM site_configs WHERE restaurant_id = ?').get(restaurantId);
     const hours = db.prepare('SELECT * FROM opening_hours WHERE restaurant_id = ? ORDER BY weekday ASC').all(restaurantId);
@@ -378,7 +379,7 @@ function getPreviewData(restaurantId) {
             donationHintEnabled: c.current_plan === 'free' // Derived correctly from plan
         },
         meta: {
-            previewMode: true,
+            previewMode, // true für Dashboard-Preview, false für Publish/CF-Export
             renderedAt: new Date().toISOString()
         }
     };
@@ -417,7 +418,7 @@ app.post('/api/restaurant/publish', isAuthenticated, (req, res) => {
     }
 
     try {
-        const viewModel = getPreviewData(restaurant.id);
+        const viewModel = getPreviewData(restaurant.id, { previewMode: false });
         const { exportStaticSite } = require('./lib/publisher');
         const exportPath = exportStaticSite(restaurant.public_slug_internal, viewModel);
 
@@ -436,6 +437,165 @@ app.post('/api/restaurant/publish', isAuthenticated, (req, res) => {
               .run(restaurant.id, 'manual_update', 'local_filesystem', 'error', e.message);
         } catch(logErr) { console.error('Failed to log error to publish_events', logErr); }
         res.status(500).json({ error: 'Publish failed.', details: e.message });
+    }
+});
+
+// --- Cloudflare Pages Preparation API ---
+// Bereitet den Cloudflare Pages Export vor (Free Plan only).
+// Setzt voraus, dass zuvor ein lokaler Publish-Export existiert.
+// Erstellt cloudflare-export/<slug>/ mit _redirects, _headers, deploy-info.json.
+
+app.post('/api/restaurant/cf-prepare', isAuthenticated, (req, res) => {
+    const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const config = db.prepare('SELECT current_plan, is_published FROM site_configs WHERE restaurant_id = ?').get(restaurant.id);
+    if (config.current_plan !== 'free') {
+        return res.status(400).json({ error: 'Cloudflare Pages preparation is only available for the free plan.' });
+    }
+    if (!config.is_published) {
+        return res.status(400).json({ error: 'Bitte zuerst lokal veröffentlichen (Publish), bevor der Cloudflare-Export vorbereitet wird.' });
+    }
+
+    try {
+        const { prepareCfExport } = require('./lib/cf-deploy');
+        const { cfExportPath, targetHostname } = prepareCfExport(restaurant.public_slug_internal, restaurant.id);
+
+        // site_domains + publish_events als Transaktion
+        const syncTransaction = db.transaction(() => {
+            // --- site_domains synchronisieren ---
+            // Regel: Genau ein free_generated-Eintrag pro Restaurant.
+            // Status 'pending' = Export vorbereitet, aber noch kein echtes Deployment.
+            // Status 'active' wird hier bewusst NICHT gesetzt, da keine echte Live-Schaltung stattfindet.
+
+            const existing = db.prepare(
+                "SELECT id, hostname, status FROM site_domains WHERE restaurant_id = ? AND domain_type = 'free_generated' LIMIT 1"
+            ).get(restaurant.id);
+
+            if (existing) {
+                if (existing.hostname === targetHostname) {
+                    // Richtiger Hostname vorhanden → Status auf 'pending' setzen + Zeitstempel
+                    // (korrigiert ggf. einen falschen 'active'-Status aus dem Seed)
+                    db.prepare(
+                        "UPDATE site_domains SET status = 'pending', is_primary = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).run(existing.id);
+                } else {
+                    // Abweichender Hostname (altes Schema) → alten Eintrag deaktivieren, neuen anlegen
+                    db.prepare(
+                        "UPDATE site_domains SET status = 'disabled', is_primary = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).run(existing.id);
+                    db.prepare(
+                        "INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status) VALUES (?, ?, 'free_generated', 0, 'pending')"
+                    ).run(restaurant.id, targetHostname);
+                }
+            } else {
+                // Noch kein free_generated-Eintrag → neu anlegen
+                db.prepare(
+                    "INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status) VALUES (?, ?, 'free_generated', 0, 'pending')"
+                ).run(restaurant.id, targetHostname);
+            }
+
+            // --- publish_events protokollieren ---
+            db.prepare(
+                'INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, message, finished_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+            ).run(
+                restaurant.id,
+                'manual_update',
+                targetHostname,
+                'success',
+                'Cloudflare Pages Export vorbereitet (noch nicht live verbunden). site_domains aktualisiert.'
+            );
+        });
+
+        syncTransaction();
+
+        res.json({
+            success: true,
+            cfExportPath,
+            targetHostname,
+            freeHostname: {
+                hostname: targetHostname,
+                status: 'pending',
+                note: 'Vorbereitet. Kein echtes Deployment durchgeführt. status=pending bis zur manuellen Live-Schaltung.'
+            },
+            note: 'Export bereit. Manuelles Deployment über Cloudflare CLI oder Dashboard notwendig.',
+            deployHint: [
+                `Option A (Wrangler CLI): npx wrangler pages deploy cloudflare-export/${restaurant.public_slug_internal} --project-name=${restaurant.public_slug_internal}-gastrofy`,
+                'Option B: Ordner im Cloudflare Pages Dashboard hochladen'
+            ]
+        });
+    } catch (e) {
+        console.error('CF prepare error:', e);
+        try {
+            const restaurant2 = db.prepare('SELECT id, public_slug_internal FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
+            db.prepare(
+                'INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, message, finished_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+            ).run(
+                restaurant2.id,
+                'manual_update',
+                `${restaurant2.public_slug_internal}-gastrofy.pages.dev`,
+                'error',
+                e.message
+            );
+        } catch (logErr) { console.error('Failed to log CF prepare error', logErr); }
+        res.status(500).json({ error: 'CF-Prepare fehlgeschlagen.', details: e.message });
+    }
+});
+
+// Admin: Cloudflare Prepare für beliebiges Restaurant (Admin only)
+app.post('/api/admin/cf-prepare/:restaurantId', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(req.params.restaurantId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const config = db.prepare('SELECT current_plan, is_published FROM site_configs WHERE restaurant_id = ?').get(restaurant.id);
+    if (config.current_plan !== 'free') {
+        return res.status(400).json({ error: 'Only free plan supported.' });
+    }
+
+    try {
+        const { prepareCfExport } = require('./lib/cf-deploy');
+        const { cfExportPath, targetHostname } = prepareCfExport(restaurant.public_slug_internal, restaurant.id);
+
+        const syncTransaction = db.transaction(() => {
+            const existing = db.prepare(
+                "SELECT id, hostname, status FROM site_domains WHERE restaurant_id = ? AND domain_type = 'free_generated' LIMIT 1"
+            ).get(restaurant.id);
+
+            if (existing) {
+                if (existing.hostname === targetHostname) {
+                    db.prepare(
+                        "UPDATE site_domains SET status = 'pending', is_primary = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).run(existing.id);
+                } else {
+                    db.prepare(
+                        "UPDATE site_domains SET status = 'disabled', is_primary = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+                    ).run(existing.id);
+                    db.prepare(
+                        "INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status) VALUES (?, ?, 'free_generated', 0, 'pending')"
+                    ).run(restaurant.id, targetHostname);
+                }
+            } else {
+                db.prepare(
+                    "INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status) VALUES (?, ?, 'free_generated', 0, 'pending')"
+                ).run(restaurant.id, targetHostname);
+            }
+
+            db.prepare(
+                'INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, message, finished_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)'
+            ).run(
+                restaurant.id,
+                'manual_update',
+                targetHostname,
+                'success',
+                'Cloudflare Pages Export (admin-triggered) vorbereitet. site_domains aktualisiert.'
+            );
+        });
+
+        syncTransaction();
+
+        res.json({ success: true, cfExportPath, targetHostname });
+    } catch (e) {
+        res.status(500).json({ error: 'CF-Prepare fehlgeschlagen.', details: e.message });
     }
 });
 
@@ -466,5 +626,7 @@ app.get('/api/help/articles/:id', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Gastrofy Step 3 running at http://localhost:${port}`);
+    console.log(`Gastrofy running at http://localhost:${port}`);
+    console.log(`Lokaler Publish-Export: publish/<slug>/`);
+    console.log(`Cloudflare Pages Export: cloudflare-export/<slug>/`);
 });

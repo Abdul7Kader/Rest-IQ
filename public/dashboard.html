@@ -33,6 +33,7 @@
             <li><a href="#" onclick="showTab('help')" id="nav-help">Hilfe</a></li>
             <li style="margin-top: 2rem;"><a href="/preview" target="_blank" style="background: var(--primary); color: white;">Live Vorschau</a></li>
             <li style="margin-top: 0.5rem;"><a href="#" id="publishBtn" style="background: var(--success); color: white;">Lokal Veröffentlichen</a></li>
+            <li style="margin-top: 0.5rem;"><a href="#" id="cfPrepareBtn" style="background: #f97316; color: white; font-size: 0.85rem;">☁ Cloudflare vorbereiten</a></li>
             <li style="margin-top: 1rem;"><a href="#" id="logoutBtn" style="color: var(--error);">Abmelden</a></li>
         </ul>
     </div>
@@ -372,6 +373,43 @@
             
             btn.textContent = originalText;
             setTimeout(() => document.getElementById('alert').classList.add('hidden'), 8000);
+        });
+
+        // --- Cloudflare Pages Vorbereitung ---
+
+        document.getElementById('cfPrepareBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            const btn = e.target;
+            const alertBox = document.getElementById('alert');
+            btn.textContent = '☁ Bereite vor...';
+
+            try {
+                const res = await fetch('/api/restaurant/cf-prepare', { method: 'POST' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    alertBox.innerHTML = `
+                        <strong>✓ Cloudflare Export bereit</strong><br>
+                        Ziel-Hostname (vorbereitet): <code>${data.targetHostname}</code><br>
+                        Export-Pfad: <code>${data.cfExportPath}</code><br>
+                        <small>${data.note}</small><br>
+                        <small><em>Hinweis: Keine echte Cloudflare-Verbindung aktiv. Deployment über CLI oder Dashboard nötig.</em></small>
+                    `;
+                    alertBox.className = 'alert alert-success';
+                    alertBox.classList.remove('hidden');
+                } else {
+                    alertBox.textContent = data.error || 'Fehler bei der CF-Vorbereitung.';
+                    alertBox.className = 'alert alert-error';
+                    alertBox.classList.remove('hidden');
+                }
+            } catch (err) {
+                alertBox.textContent = 'Serverfehler bei der CF-Vorbereitung.';
+                alertBox.className = 'alert alert-error';
+                alertBox.classList.remove('hidden');
+            }
+
+            btn.textContent = '☁ Cloudflare vorbereiten';
+            setTimeout(() => document.getElementById('alert').classList.add('hidden'), 12000);
         });
 
         init();

@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "db:init": "node db/init.js",
+    "cf:serve": "npx serve cloudflare-export",
+    "cf:serve:slug": "npx serve cloudflare-export/trattoria-mario",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
