@@ -1,10 +1,10 @@
-# Relationales Datenmodell - Gastrofy V1
+# Relationales Datenmodell - Restiq V1
 
-Dieses Dokument beschreibt das technische und fachliche Design der Gastrofy-Plattform für Version 1.
+Dieses Dokument beschreibt das technische und fachliche Design der Restiq-Plattform für Version 1.
 
 ## 1. Identität vs. Domain (Decoupled Identity)
 
-Ein zentrales Design-Prinzip von Gastrofy ist die strikte Trennung zwischen der **Identität eines Restaurants** und seinem **Hostname**.
+Ein zentrales Design-Prinzip von Restiq ist die strikte Trennung zwischen der **Identität eines Restaurants** und seinem **Hostname**.
 
 - **Die Identität** ist die `id` in der Tabelle `restaurants`. Alle Daten (Menüs, Öffnungszeiten, Konfigurationen) sind an diese ID gebunden.
 - **Domains/Hostnames** sind in der Cloud-Infrastruktur lediglich "Wegweiser" zum Inhalt. In der Tabelle `site_domains` können einem Restaurant beliebig viele Hostnames zugeordnet werden (z. B. ein kostenloser generierter Name und später eine eigene Premium-Domain).

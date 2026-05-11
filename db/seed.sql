@@ -1,8 +1,8 @@
--- Gastrofy Seed Data V1
+-- Restiq Seed Data V1
 
 -- 1. Users
 INSERT INTO users (id, email, password_hash, role) VALUES 
-(1, 'admin@gastrofy.app', '$2b$12$gCTVjcu.d6SCnu6PQ5SoHO/1P0aXifJKDNaY1tgqhmx.2hnXaCn.O', 'platform_admin'),
+(1, 'admin@restiq.app', '$2b$12$gCTVjcu.d6SCnu6PQ5SoHO/1P0aXifJKDNaY1tgqhmx.2hnXaCn.O', 'platform_admin'),
 (2, 'mario@trattoria-mario.de', '$2b$12$mNPidYzU04C38MxQMYl5uudFRthHu/WhAiK6FmVn/RG5b9WVcstmy', 'restaurant_owner');
 
 -- 2. Restaurants
@@ -41,14 +41,14 @@ INSERT INTO dishes (category_id, dish_name, price_cents, description_text, ingre
 
 -- 8. Site Domains
 INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status) VALUES 
-(1, 'trattoria-mario-gastrofy.pages.dev', 'free_generated', 1, 'active');
+(1, 'trattoria-mario-restiq.pages.dev', 'free_generated', 1, 'active');
 
 -- 11. Help Articles
 INSERT INTO help_articles (article_type, title, slug, content_markdown, sort_order) VALUES 
-('tutorial', 'Erste Schritte', 'erste-schritte', '# Willkommen bei Gastrofy\nIn diesem Tutorial lernst du, wie du dein Restaurant einrichtest...', 0),
+('tutorial', 'Erste Schritte', 'erste-schritte', '# Willkommen bei Restiq\nIn diesem Tutorial lernst du, wie du dein Restaurant einrichtest...', 0),
 ('help', 'Wie bearbeite ich mein Menü', 'menue-bearbeiten', '# Menüverwaltung\nGehe zum Bereich "Menü", um Kategorien und Gerichte hinzuzufügen...', 1);
 
 -- 12. Domain Providers
 INSERT INTO domain_providers (provider_name, provider_type, website_url, affiliate_base_url, supports_free_domains, supports_paid_domains) VALUES 
 ('Cloudflare', 'free_hosting', 'https://cloudflare.com', NULL, 1, 0),
-('Namecheap', 'registrar', 'https://namecheap.com', 'https://namecheap.com?aff=gastrofy', 0, 1);
+('Namecheap', 'registrar', 'https://namecheap.com', 'https://namecheap.com?aff=restiq', 0, 1);

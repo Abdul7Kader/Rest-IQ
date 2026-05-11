@@ -5,7 +5,7 @@
 
 window.free_default = function(data) {
     const { restaurant, siteConfig, menu, hours, flags } = data;
-    const { utils } = window.GastrofyRenderer;
+    const { utils } = window.RestiqRenderer;
 
     return `
         <div class="template-free-default">
@@ -71,7 +71,7 @@ window.free_default = function(data) {
             
             <footer style="margin-top: 5rem; padding: 2rem; border-top: 1px solid var(--border); text-align: center; color: var(--text-muted);">
                 <p>${siteConfig.footerNote || ''}</p>
-                <p style="font-size: 0.8rem; margin-top: 1rem;">Powered by Gastrofy Platform</p>
+                <p style="font-size: 0.8rem; margin-top: 1rem;">Powered by Restiq Platform</p>
             </footer>
         </div>
     `;

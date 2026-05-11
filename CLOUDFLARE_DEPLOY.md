@@ -1,4 +1,4 @@
-# Gastrofy – Cloudflare Pages Deployment-Dokumentation
+# Restiq – Cloudflare Pages Deployment-Dokumentation
 
 Stand: Schritt 8 | Kostenlose Stufe (Free Plan)
 
@@ -17,15 +17,15 @@ Beide Verzeichnisse sind im `.gitignore` und werden durch den Server generiert.
 
 ## URL-Strategie für kostenlose Seiten
 
-Kostenlose Restaurants erhalten eine URL unter dem Gastrofy-Plattform-Branding:
+Kostenlose Restaurants erhalten eine URL unter dem Restiq-Plattform-Branding:
 
 ```
-<slug>-gastrofy.pages.dev
+<slug>-restiq.pages.dev
 ```
 
 Beispiel Trattoria Mario:
 ```
-trattoria-mario-gastrofy.pages.dev
+trattoria-mario-restiq.pages.dev
 ```
 
 > **Noch nicht live verbunden.** Die Infrastruktur und der Export sind vorbereitet.
@@ -64,7 +64,7 @@ POST /api/restaurant/cf-prepare
   - `_redirects` – Basis-Redirect-Regeln
   - `_headers` – Security + Cache-Control Header
   - `deploy-info.json` – maschinenlesbare Metadaten
-- Loggt in `publish_events` mit `target_hostname = '<slug>-gastrofy.pages.dev'`
+- Loggt in `publish_events` mit `target_hostname = '<slug>-restiq.pages.dev'`
 - Gibt Export-Pfad und geplanten Hostname zurück
 
 ---
@@ -92,7 +92,7 @@ cloudflare-export/
 
 ## Lokale Testmöglichkeiten
 
-### Option A: Gastrofy-Server (bestehend, Port 3000)
+### Option A: Restiq-Server (bestehend, Port 3000)
 
 ```bash
 node server.js
@@ -132,19 +132,19 @@ ausliefern würde.
 
 ### Voraussetzung
 
-Ein Cloudflare-Konto und ein Pages-Projekt `gastrofy` müssen manuell angelegt werden.
+Ein Cloudflare-Konto und ein Pages-Projekt `restiq` müssen manuell angelegt werden.
 
 ### Option A: Wrangler CLI
 
 ```bash
-npx wrangler pages deploy cloudflare-export/trattoria-mario --project-name=trattoria-mario-gastrofy
+npx wrangler pages deploy cloudflare-export/trattoria-mario --project-name=trattoria-mario-restiq
 ```
 
 ### Option B: Cloudflare Pages Dashboard
 
 1. cloudflare.com/pages aufrufen
 2. Neues Projekt anlegen oder bestehendes öffnen
-3. "Deploy" → "Direct Upload"
+3. „Deploy" → „Direct Upload"
 4. Verzeichnis `cloudflare-export/<slug>/` hochladen
 
 ---
@@ -153,10 +153,10 @@ npx wrangler pages deploy cloudflare-export/trattoria-mario --project-name=tratt
 
 Beide Schritte protokollieren in `publish_events`:
 
-| Schritt                   | trigger_type    | target_hostname                    | status  |
-|--------------------------|-----------------|-----------------------------------|---------|
-| Lokal Publish             | `manual_update` | `local_filesystem`                | success |
-| Cloudflare Vorbereitung   | `manual_update` | `trattoria-mario-gastrofy.pages.dev` | success |
+| Schritt                   | trigger_type    | target_hostname                   | status  |
+|--------------------------|-----------------|----------------------------------|---------|
+| Lokal Publish             | `manual_update` | `local_filesystem`               | success |
+| Cloudflare Vorbereitung   | `manual_update` | `trattoria-mario-restiq.pages.dev` | success |
 
 ---
 
@@ -167,7 +167,7 @@ Beide Schritte protokollieren in `publish_events`:
 | Zweck              | Lokale Vorschau / Archiv      | Deployment zu Cloudflare Pages         |
 | Cloudflare-Dateien | ✗                             | `_redirects`, `_headers`, `deploy-info.json` |
 | Render-Logik       | identisch (Shared Assets)     | identisch (Shared Assets)              |
-| URL-Strategie      | lokal per npx serve           | `<slug>-gastrofy.pages.dev`            |
+| URL-Strategie      | lokal per npx serve           | `<slug>-restiq.pages.dev`            |
 
 ---
 
@@ -176,7 +176,7 @@ Beide Schritte protokollieren in `publish_events`:
 | Rolle     | E-Mail                    | Passwort   |
 |-----------|--------------------------|------------|
 | Owner     | mario@trattoria-mario.de | owner123   |
-| Admin     | admin@gastrofy.app       | admin123   |
+| Admin     | admin@restiq.app         | admin123   |
 
 ---
 

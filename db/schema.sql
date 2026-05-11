@@ -1,4 +1,4 @@
--- Gastrofy Relational Data Model V1
+-- Restiq Relational Data Model V1
 -- Target: SQLite
 
 PRAGMA foreign_keys = ON;

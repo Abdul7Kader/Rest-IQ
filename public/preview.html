@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vorschau - Gastrofy</title>
+    <title>Vorschau - Restiq</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .preview-banner { position: fixed; top: 0; left: 0; right: 0; background: #1e293b; color: white; text-align: center; padding: 0.5rem; font-size: 0.8rem; z-index: 1000; }
@@ -43,7 +43,7 @@
                 const data = await res.json();
                 
                 const container = document.getElementById('renderTarget');
-                window.GastrofyRenderer.render(data, container);
+                window.RestiqRenderer.render(data, container);
 
             } catch (err) {
                 document.getElementById('renderTarget').innerHTML = `

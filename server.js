@@ -13,7 +13,7 @@ app.use(express.static('public'));
 
 // Session setup (In-memory for Dev/V1)
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'gastrofy-fallback-secret',
+    secret: process.env.SESSION_SECRET || 'restiq-fallback-secret',
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -520,7 +520,7 @@ app.post('/api/restaurant/cf-prepare', isAuthenticated, (req, res) => {
             },
             note: 'Export bereit. Manuelles Deployment über Cloudflare CLI oder Dashboard notwendig.',
             deployHint: [
-                `Option A (Wrangler CLI): npx wrangler pages deploy cloudflare-export/${restaurant.public_slug_internal} --project-name=${restaurant.public_slug_internal}-gastrofy`,
+                `Option A (Wrangler CLI): npx wrangler pages deploy cloudflare-export/${restaurant.public_slug_internal} --project-name=${restaurant.public_slug_internal}-restiq`,
                 'Option B: Ordner im Cloudflare Pages Dashboard hochladen'
             ]
         });
@@ -533,7 +533,7 @@ app.post('/api/restaurant/cf-prepare', isAuthenticated, (req, res) => {
             ).run(
                 restaurant2.id,
                 'manual_update',
-                `${restaurant2.public_slug_internal}-gastrofy.pages.dev`,
+                `${restaurant2.public_slug_internal}-restiq.pages.dev`,
                 'error',
                 e.message
             );
@@ -626,7 +626,7 @@ app.get('/api/help/articles/:id', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Gastrofy running at http://localhost:${port}`);
+    console.log(`Restiq running at http://localhost:${port}`);
     console.log(`Lokaler Publish-Export: publish/<slug>/`);
     console.log(`Cloudflare Pages Export: cloudflare-export/<slug>/`);
 });

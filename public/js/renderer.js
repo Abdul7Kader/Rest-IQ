@@ -1,5 +1,5 @@
 /**
- * Gastrofy Renderer Layer
+ * Restiq Renderer Layer
  * Decouples normalized data from individual templates.
  */
 
@@ -61,7 +61,7 @@ const Renderer = {
             if (!flags || !flags.donationHintEnabled) return '';
             return `
                 <div class="donation-hint" style="background: #fff7ed; border: 1px solid #ffedd5; color: #9a3412; padding: 1rem; text-align: center; border-radius: 8px; margin-bottom: 2rem;">
-                    <strong>Gefällt Ihnen dieses Restaurant?</strong> Unterstützen Sie die Gastrofy-Plattform mit einer kleinen Spende, damit wir lokale Restaurants weiterhin fördern können.
+                    <strong>Gefällt Ihnen dieses Restaurant?</strong> Unterstützen Sie die Restiq-Plattform mit einer kleinen Spende, damit wir lokale Restaurants weiterhin fördern können.
                 </div>
             `;
         },
@@ -87,4 +87,4 @@ const Renderer = {
     }
 };
 
-window.GastrofyRenderer = Renderer;
+window.RestiqRenderer = Renderer;

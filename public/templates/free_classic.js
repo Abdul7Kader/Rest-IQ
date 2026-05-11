@@ -5,7 +5,7 @@
 
 window.free_classic = function(data) {
     const { restaurant, siteConfig, menu, hours, flags } = data;
-    const { utils } = window.GastrofyRenderer;
+    const { utils } = window.RestiqRenderer;
 
     return `
         <div class="template-free-classic" style="font-family: 'Georgia', serif;">
@@ -68,7 +68,7 @@ window.free_classic = function(data) {
 
             <footer style="text-align: center; padding: 4rem 1rem; background: #fdfdfd; border-top: 1px solid #eee; color: #888;">
                 <p>${siteConfig.footerNote || ''}</p>
-                <div style="margin-top: 2rem; font-family: sans-serif; font-size: 0.75rem;">Gastrofy Classic Template</div>
+                <div style="margin-top: 2rem; font-family: sans-serif; font-size: 0.75rem;">Restiq Classic Template</div>
             </footer>
         </div>
     `;
