@@ -42,6 +42,34 @@
         <div id="alert" class="alert alert-error hidden"></div>
         <div id="success" class="alert alert-success hidden">Änderungen gespeichert!</div>
 
+        <div id="setupState" class="hidden">
+            <div class="section-header">
+                <h1>Restaurantprofil anlegen</h1>
+            </div>
+            <div class="card">
+                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+                    Dieser Zugang hat noch kein Restaurantprofil. Legen Sie es an, danach wird der Arbeitsbereich freigeschaltet.
+                </p>
+                <form id="setupForm">
+                    <div class="form-group"><label>Restaurant Name</label><input type="text" name="restaurant_name" required></div>
+                    <div class="form-group"><label>Kurzbeschreibung</label><textarea name="short_description" rows="3"></textarea></div>
+                    <div class="grid">
+                        <div class="form-group"><label>E-Mail</label><input type="email" name="contact_email"></div>
+                        <div class="form-group"><label>Telefon</label><input type="text" name="contact_phone"></div>
+                    </div>
+                    <div class="grid" style="grid-template-columns: 2fr 1fr;">
+                        <div class="form-group"><label>Straße</label><input type="text" name="street"></div>
+                        <div class="form-group"><label>Hausnr.</label><input type="text" name="house_number"></div>
+                    </div>
+                    <div class="grid">
+                        <div class="form-group"><label>PLZ</label><input type="text" name="postal_code"></div>
+                        <div class="form-group"><label>Stadt</label><input type="text" name="city"></div>
+                    </div>
+                    <button type="submit">Restaurantprofil anlegen</button>
+                </form>
+            </div>
+        </div>
+
         <!-- Grunddaten -->
         <div id="tab-base" class="tab-content active">
             <div class="section-header">
@@ -141,17 +169,46 @@
 
     <script>
         let restaurantData = null;
+        let currentMenuId = null;
         const weekdays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
         async function init() {
+            const meRes = await fetch('/api/auth/me');
+            if (!meRes.ok) {
+                window.location.href = 'index.html';
+                return;
+            }
+            const me = await meRes.json();
+            if (me.role === 'platform_admin') {
+                window.location.href = 'admin.html';
+                return;
+            }
+
             const res = await fetch('/api/restaurant');
+            if (res.status === 404) {
+                showSetupState();
+                return;
+            }
+            if (!res.ok) {
+                window.location.href = 'index.html';
+                return;
+            }
+
             restaurantData = await res.json();
-            if (!restaurantData) window.location.href = 'index.html';
             
             fillForms();
             loadHours();
             loadMenu();
             loadHelp();
+        }
+
+        function showSetupState() {
+            document.getElementById('setupState').classList.remove('hidden');
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.sidebar-nav a').forEach(a => {
+                if (a.id !== 'logoutBtn') a.style.pointerEvents = 'none';
+                if (a.id !== 'logoutBtn') a.style.opacity = '0.45';
+            });
         }
 
         function showTab(tabId) {
@@ -227,6 +284,7 @@
         async function loadMenu() {
             const res = await fetch('/api/menu');
             const menu = await res.json();
+            currentMenuId = menu.id;
             const container = document.getElementById('menuStructure');
             container.innerHTML = '';
 
@@ -285,11 +343,11 @@
         async function saveCategory(e) {
             e.preventDefault();
             const data = Object.fromEntries(new FormData(e.target));
-            data.menu_id = restaurantData.id; // Corrected: should be the active menu ID, but restaurantData has it if loaded
+            data.menu_id = currentMenuId;
             const res = await fetch('/api/menu/categories', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...data, menu_id: 1 }) // Hardcoded 1 for demo since we only have one menu
+                body: JSON.stringify(data)
             });
             if (res.ok) { closeModal(); loadMenu(); }
         }
@@ -330,6 +388,28 @@
             setTimeout(() => s.classList.add('hidden'), 3000);
         }
 
+        document.getElementById('setupForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const alert = document.getElementById('alert');
+            alert.classList.add('hidden');
+
+            const data = Object.fromEntries(new FormData(e.target).entries());
+            const res = await fetch('/api/restaurant/setup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const payload = await res.json();
+
+            if (res.ok && payload.success) {
+                window.location.reload();
+            } else {
+                alert.textContent = payload.error || 'Restaurantprofil konnte nicht angelegt werden.';
+                alert.className = 'alert alert-error';
+                alert.classList.remove('hidden');
+            }
+        });
+
         async function loadHelp() {
             const res = await fetch('/api/help/articles');
             const articles = await res.json();
@@ -355,7 +435,8 @@
                 
                 if (res.ok) {
                     const alert = document.getElementById('alert');
-                    alert.textContent = 'Erfolgreich veröffentlicht! ' + data.exportPath;
+                    const slug = restaurantData.public_slug_internal;
+                    alert.innerHTML = `Erfolgreich veröffentlicht. <a href="/published/${slug}" target="_blank">Veröffentlichte Seite öffnen</a><br><small>${data.exportPath}</small>`;
                     alert.className = 'alert alert-success';
                     alert.classList.remove('hidden');
                 } else {

@@ -7,22 +7,65 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <div class="container" style="max-width: 400px; margin-top: 5rem;">
+    <div class="container" style="max-width: 760px; margin-top: 3rem;">
         <div class="card">
             <h1>Konto erstellen</h1>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Starten Sie Ihr Restaurant-Projekt noch heute.</p>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Legen Sie Ihren Zugang und das erste Restaurantprofil an.</p>
             
             <div id="alert" class="alert alert-error hidden"></div>
             <div id="success" class="alert alert-success hidden">Konto erstellt! <a href="index.html">Zum Login</a></div>
 
             <form id="registerForm">
+                <h2>Zugang</h2>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="email">E-Mail Adresse</label>
+                        <input type="email" id="email" name="email" required placeholder="name@beispiel.de">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Passwort (min. 8 Zeichen)</label>
+                        <input type="password" id="password" name="password" required minlength="8" placeholder="••••••••">
+                    </div>
+                </div>
+
+                <h2 style="margin-top: 2rem;">Restaurant</h2>
                 <div class="form-group">
-                    <label for="email">E-Mail Adresse</label>
-                    <input type="email" id="email" required placeholder="name@beispiel.de">
+                    <label for="restaurant_name">Restaurantname</label>
+                    <input type="text" id="restaurant_name" name="restaurant_name" required placeholder="Trattoria Beispiel">
                 </div>
                 <div class="form-group">
-                    <label for="password">Passwort (min. 8 Zeichen)</label>
-                    <input type="password" id="password" required minlength="8" placeholder="••••••••">
+                    <label for="short_description">Kurzbeschreibung</label>
+                    <textarea id="short_description" name="short_description" rows="3" placeholder="Kurze Beschreibung fuer die Restaurantseite"></textarea>
+                </div>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="contact_phone">Telefon</label>
+                        <input type="text" id="contact_phone" name="contact_phone" placeholder="+49 ...">
+                    </div>
+                    <div class="form-group">
+                        <label for="contact_email">Kontakt-E-Mail</label>
+                        <input type="email" id="contact_email" name="contact_email" placeholder="info@restaurant.de">
+                    </div>
+                </div>
+                <div class="grid" style="grid-template-columns: 2fr 1fr;">
+                    <div class="form-group">
+                        <label for="street">Straße</label>
+                        <input type="text" id="street" name="street">
+                    </div>
+                    <div class="form-group">
+                        <label for="house_number">Hausnr.</label>
+                        <input type="text" id="house_number" name="house_number">
+                    </div>
+                </div>
+                <div class="grid">
+                    <div class="form-group">
+                        <label for="postal_code">PLZ</label>
+                        <input type="text" id="postal_code" name="postal_code">
+                    </div>
+                    <div class="form-group">
+                        <label for="city">Stadt</label>
+                        <input type="text" id="city" name="city">
+                    </div>
                 </div>
                 <button type="submit" style="width: 100%;">Registrieren</button>
             </form>
@@ -41,20 +84,20 @@
             alert.classList.add('hidden');
             success.classList.add('hidden');
 
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
+            const formData = new FormData(e.target);
+            const payload = Object.fromEntries(formData.entries());
+            if (!payload.contact_email) payload.contact_email = payload.email;
 
             try {
                 const res = await fetch('/api/auth/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify(payload)
                 });
 
                 const data = await res.json();
                 if (data.success) {
-                    success.classList.remove('hidden');
-                    document.getElementById('registerForm').classList.add('hidden');
+                    window.location.href = 'dashboard.html';
                 } else {
                     alert.textContent = data.error || 'Registrierung fehlgeschlagen.';
                     alert.classList.remove('hidden');

@@ -23,6 +23,81 @@ app.use(session({
     }
 }));
 
+function slugify(value) {
+    return String(value || '')
+        .toLowerCase()
+        .trim()
+        .replace(/ä/g, 'ae')
+        .replace(/ö/g, 'oe')
+        .replace(/ü/g, 'ue')
+        .replace(/ß/g, 'ss')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'restaurant';
+}
+
+function createUniqueRestaurantSlug(name) {
+    const base = slugify(name);
+    let slug = base;
+    let counter = 2;
+
+    while (db.prepare('SELECT id FROM restaurants WHERE public_slug_internal = ?').get(slug)) {
+        slug = `${base}-${counter}`;
+        counter += 1;
+    }
+
+    return slug;
+}
+
+function createRestaurantForOwner(ownerUserId, payload) {
+    const existing = db.prepare('SELECT id FROM restaurants WHERE owner_user_id = ?').get(ownerUserId);
+    if (existing) {
+        throw new Error('OWNER_ALREADY_HAS_RESTAURANT');
+    }
+
+    const restaurantName = String(payload.restaurant_name || '').trim();
+    if (!restaurantName) {
+        throw new Error('RESTAURANT_NAME_REQUIRED');
+    }
+
+    const contactEmail = String(payload.contact_email || payload.email || '').trim();
+    const slug = createUniqueRestaurantSlug(restaurantName);
+
+    const info = db.prepare(`
+        INSERT INTO restaurants (
+            owner_user_id, restaurant_name, public_slug_internal, short_description,
+            contact_email, contact_phone, street, house_number, postal_code, city
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+        ownerUserId,
+        restaurantName,
+        slug,
+        String(payload.short_description || '').trim(),
+        contactEmail,
+        String(payload.contact_phone || '').trim(),
+        String(payload.street || '').trim(),
+        String(payload.house_number || '').trim(),
+        String(payload.postal_code || '').trim(),
+        String(payload.city || '').trim()
+    );
+
+    const restaurantId = info.lastInsertRowid;
+    db.prepare(`
+        INSERT INTO site_configs (
+            restaurant_id, current_plan, template_key, ads_enabled, donation_hint_enabled,
+            hero_title, hero_subtitle
+        )
+        VALUES (?, 'free', 'free_default', 1, 1, ?, ?)
+    `).run(
+        restaurantId,
+        restaurantName,
+        String(payload.short_description || '').trim()
+    );
+    db.prepare('INSERT INTO menus (restaurant_id, title) VALUES (?, ?)').run(restaurantId, 'Speisekarte');
+
+    return { id: restaurantId, slug };
+}
+
 // --- Auth Routes ---
 
 app.post('/api/auth/register', async (req, res) => {
@@ -34,12 +109,28 @@ app.post('/api/auth/register', async (req, res) => {
 
     try {
         const hash = await hashPassword(password);
-        const stmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
-        stmt.run(email, hash, 'restaurant_owner');
-        res.json({ success: true });
+        const result = db.transaction(() => {
+            const stmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
+            const userInfo = stmt.run(email, hash, 'restaurant_owner');
+            const restaurant = createRestaurantForOwner(userInfo.lastInsertRowid, { ...req.body, email });
+            return { userId: userInfo.lastInsertRowid, restaurant };
+        })();
+
+        req.session.userId = result.userId;
+        req.session.role = 'restaurant_owner';
+        req.session.email = email;
+
+        res.json({
+            success: true,
+            user: { email, role: 'restaurant_owner' },
+            restaurant: result.restaurant
+        });
     } catch (error) {
         if (error.message.includes('UNIQUE constraint failed: users.email')) {
             return res.status(400).json({ error: 'Email already registered.' });
+        }
+        if (error.message === 'RESTAURANT_NAME_REQUIRED') {
+            return res.status(400).json({ error: 'Restaurant name is required.' });
         }
         res.status(500).json({ error: 'Registration failed.' });
     }
@@ -83,6 +174,61 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 // --- Restaurant Routes (Expanded) ---
+
+app.get('/api/restaurant', isAuthenticated, (req, res) => {
+    const restaurant = db.prepare(`
+        SELECT r.*, s.current_plan, s.template_key, s.ads_enabled, s.donation_hint_enabled,
+               s.is_published, s.primary_language, s.accent_color, s.hero_title,
+               s.hero_subtitle, s.about_text, s.logo_image_url, s.hero_image_url,
+               s.footer_note, s.seo_title, s.seo_description
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+        WHERE r.owner_user_id = ?
+    `).get(req.session.userId);
+
+    if (!restaurant) {
+        return res.status(404).json({ error: 'Restaurant not found.' });
+    }
+
+    restaurant.config = {
+        current_plan: restaurant.current_plan,
+        template_key: restaurant.template_key,
+        ads_enabled: restaurant.ads_enabled,
+        donation_hint_enabled: restaurant.donation_hint_enabled,
+        is_published: restaurant.is_published,
+        primary_language: restaurant.primary_language,
+        accent_color: restaurant.accent_color,
+        hero_title: restaurant.hero_title,
+        hero_subtitle: restaurant.hero_subtitle,
+        about_text: restaurant.about_text,
+        logo_image_url: restaurant.logo_image_url,
+        hero_image_url: restaurant.hero_image_url,
+        footer_note: restaurant.footer_note,
+        seo_title: restaurant.seo_title,
+        seo_description: restaurant.seo_description
+    };
+
+    res.json(restaurant);
+});
+
+app.post('/api/restaurant/setup', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    try {
+        const restaurant = db.transaction(() => createRestaurantForOwner(req.session.userId, {
+            ...req.body,
+            email: req.session.email
+        }))();
+
+        res.json({ success: true, restaurant });
+    } catch (error) {
+        if (error.message === 'OWNER_ALREADY_HAS_RESTAURANT') {
+            return res.status(400).json({ error: 'This account already has a restaurant.' });
+        }
+        if (error.message === 'RESTAURANT_NAME_REQUIRED') {
+            return res.status(400).json({ error: 'Restaurant name is required.' });
+        }
+        res.status(500).json({ error: 'Restaurant setup failed.' });
+    }
+});
 
 app.patch('/api/restaurant', isAuthenticated, (req, res) => {
     const fields = [
@@ -404,6 +550,36 @@ app.get('/preview', isAuthenticated, (req, res) => {
 
 app.get('/preview/:id', isAuthenticated, hasRole('platform_admin'), (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'preview.html'));
+});
+
+app.get('/published/:slug', (req, res) => {
+    const restaurant = db.prepare(`
+        SELECT r.public_slug_internal, s.is_published
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+        WHERE r.public_slug_internal = ? AND r.is_active = 1
+    `).get(req.params.slug);
+
+    if (!restaurant || restaurant.is_published !== 1) {
+        return res.status(404).send('Diese Restiq-Seite wurde noch nicht veroeffentlicht.');
+    }
+
+    res.sendFile(path.join(__dirname, 'publish', restaurant.public_slug_internal, 'index.html'));
+});
+
+app.use('/published/:slug', (req, res, next) => {
+    const restaurant = db.prepare(`
+        SELECT r.public_slug_internal, s.is_published
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+        WHERE r.public_slug_internal = ? AND r.is_active = 1
+    `).get(req.params.slug);
+
+    if (!restaurant || restaurant.is_published !== 1) {
+        return res.status(404).send('Diese Restiq-Seite wurde noch nicht veroeffentlicht.');
+    }
+
+    express.static(path.join(__dirname, 'publish', restaurant.public_slug_internal))(req, res, next);
 });
 
 // --- Publish API ---
