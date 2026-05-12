@@ -230,6 +230,61 @@ app.post('/api/restaurant/setup', isAuthenticated, hasRole('restaurant_owner'), 
     }
 });
 
+app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = db.prepare(`
+        SELECT r.id, r.restaurant_name, r.public_slug_internal, s.current_plan,
+               s.is_published, s.template_key, d.hostname as free_hostname,
+               d.status as free_domain_status, pe.status as last_publish_status,
+               pe.created_at as last_publish_at, pe.message as last_publish_message
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+        LEFT JOIN site_domains d ON d.id = (
+            SELECT id FROM site_domains
+            WHERE restaurant_id = r.id AND domain_type = 'free_generated'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        )
+        LEFT JOIN publish_events pe ON pe.id = (
+            SELECT id FROM publish_events
+            WHERE restaurant_id = r.id
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        )
+        WHERE r.owner_user_id = ?
+    `).get(req.session.userId);
+
+    if (!restaurant) {
+        return res.status(404).json({ error: 'Restaurant not found.' });
+    }
+
+    const expectedFreeHostname = `${restaurant.public_slug_internal}-restiq.pages.dev`;
+    let nextStep = 'Seite lokal veroeffentlichen';
+    if (restaurant.is_published === 1 && restaurant.free_domain_status !== 'pending' && restaurant.free_domain_status !== 'active') {
+        nextStep = 'Cloudflare-Export vorbereiten';
+    } else if (restaurant.free_domain_status === 'pending') {
+        nextStep = 'Manuellen Cloudflare-Upload pruefen';
+    } else if (restaurant.free_domain_status === 'active') {
+        nextStep = 'Live-Seite pruefen';
+    }
+
+    res.json({
+        restaurantId: restaurant.id,
+        restaurantName: restaurant.restaurant_name,
+        slug: restaurant.public_slug_internal,
+        plan: restaurant.current_plan,
+        template: restaurant.template_key,
+        isPublished: restaurant.is_published === 1,
+        localPublishedUrl: restaurant.is_published === 1 ? `/published/${restaurant.public_slug_internal}` : null,
+        expectedFreeHostname,
+        freeHostname: restaurant.free_hostname || expectedFreeHostname,
+        freeDomainStatus: restaurant.free_domain_status || 'not_prepared',
+        lastPublishStatus: restaurant.last_publish_status,
+        lastPublishAt: restaurant.last_publish_at,
+        lastPublishMessage: restaurant.last_publish_message,
+        nextStep
+    });
+});
+
 app.patch('/api/restaurant', isAuthenticated, (req, res) => {
     const fields = [
         'restaurant_name', 'short_description', 'contact_email', 'contact_phone', 

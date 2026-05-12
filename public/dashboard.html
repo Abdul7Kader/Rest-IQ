@@ -20,6 +20,14 @@
         .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
         .hours-grid { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; align-items: center; }
         .preview-bar { background: #1e293b; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; margin-bottom: 2rem; }
+        .status-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .status-box { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+        .status-label { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; }
+        .status-value { font-weight: 700; }
+        .status-pill { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+        .status-ok { background: #dcfce7; color: #166534; }
+        .status-warn { background: #fef3c7; color: #92400e; }
+        .status-muted { background: #e2e8f0; color: #475569; }
     </style>
 </head>
 <body>
@@ -41,6 +49,7 @@
     <div class="main-content">
         <div id="alert" class="alert alert-error hidden"></div>
         <div id="success" class="alert alert-success hidden">Änderungen gespeichert!</div>
+        <div id="statusPanel" class="status-panel hidden"></div>
 
         <div id="setupState" class="hidden">
             <div class="section-header">
@@ -197,6 +206,7 @@
             restaurantData = await res.json();
             
             fillForms();
+            loadStatus();
             loadHours();
             loadMenu();
             loadHelp();
@@ -230,6 +240,44 @@
             });
         }
 
+        async function loadStatus() {
+            const res = await fetch('/api/restaurant/status');
+            if (!res.ok) return;
+
+            const status = await res.json();
+            const panel = document.getElementById('statusPanel');
+            const publishedClass = status.isPublished ? 'status-ok' : 'status-muted';
+            const domainClass = status.freeDomainStatus === 'active'
+                ? 'status-ok'
+                : (status.freeDomainStatus === 'pending' ? 'status-warn' : 'status-muted');
+            const publishedLink = status.localPublishedUrl
+                ? `<a href="${status.localPublishedUrl}" target="_blank">öffnen</a>`
+                : '<span style="color: var(--text-muted);">noch nicht verfügbar</span>';
+
+            panel.innerHTML = `
+                <div class="status-box">
+                    <div class="status-label">Veröffentlichung</div>
+                    <div class="status-value"><span class="status-pill ${publishedClass}">${status.isPublished ? 'published' : 'draft'}</span></div>
+                    <small>${publishedLink}</small>
+                </div>
+                <div class="status-box">
+                    <div class="status-label">Kostenlose Adresse</div>
+                    <div class="status-value" style="font-size: 0.9rem;">${status.freeHostname}</div>
+                    <small><span class="status-pill ${domainClass}">${status.freeDomainStatus}</span></small>
+                </div>
+                <div class="status-box">
+                    <div class="status-label">Template / Tarif</div>
+                    <div class="status-value">${status.template || 'free_default'} / ${status.plan}</div>
+                    <small>${status.lastPublishStatus ? `letztes Event: ${status.lastPublishStatus}` : 'kein Publish-Event'}</small>
+                </div>
+                <div class="status-box">
+                    <div class="status-label">Nächster Schritt</div>
+                    <div class="status-value">${status.nextStep}</div>
+                </div>
+            `;
+            panel.classList.remove('hidden');
+        }
+
         async function handleSave(e, type) {
             e.preventDefault();
             const formData = new FormData(e.target);
@@ -240,7 +288,10 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            if (res.ok) showSuccess();
+            if (res.ok) {
+                showSuccess();
+                loadStatus();
+            }
         }
 
         async function loadHours() {
@@ -439,6 +490,7 @@
                     alert.innerHTML = `Erfolgreich veröffentlicht. <a href="/published/${slug}" target="_blank">Veröffentlichte Seite öffnen</a><br><small>${data.exportPath}</small>`;
                     alert.className = 'alert alert-success';
                     alert.classList.remove('hidden');
+                    loadStatus();
                 } else {
                     const alert = document.getElementById('alert');
                     alert.textContent = data.error || 'Fehler beim Veröffentlichen.';
@@ -478,6 +530,7 @@
                     `;
                     alertBox.className = 'alert alert-success';
                     alertBox.classList.remove('hidden');
+                    loadStatus();
                 } else {
                     alertBox.textContent = data.error || 'Fehler bei der CF-Vorbereitung.';
                     alertBox.className = 'alert alert-error';
