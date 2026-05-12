@@ -7,21 +7,101 @@ const { hashPassword, verifyPassword, isAuthenticated, hasRole } = require('./li
 
 const app = express();
 const port = process.env.PORT || 3000;
+const isProduction = process.env.NODE_ENV === 'production';
+const SESSION_COOKIE_NAME = 'restiq.sid';
+const SESSION_SECRET = process.env.SESSION_SECRET || 'restiq-fallback-secret';
 
-app.use(express.json());
+if (isProduction && SESSION_SECRET === 'restiq-fallback-secret') {
+    throw new Error('SESSION_SECRET must be set in production.');
+}
+
+app.disable('x-powered-by');
+if (process.env.TRUST_PROXY === '1') {
+    app.set('trust proxy', 1);
+}
+
+app.use(express.json({ limit: '100kb' }));
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    res.setHeader(
+        'Content-Security-Policy',
+        [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' https: data:",
+            "connect-src 'self'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'"
+        ].join('; ')
+    );
+    next();
+});
 app.use(express.static('public'));
 
 // Session setup (In-memory for Dev/V1)
 app.use(session({
-    secret: process.env.SESSION_SECRET || 'restiq-fallback-secret',
+    name: SESSION_COOKIE_NAME,
+    secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: false, // Set to true for HTTPS
+        secure: isProduction,
         httpOnly: true,
+        sameSite: 'lax',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
+
+function normalizeEmail(email) {
+    return String(email || '').trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function createRateLimiter({ windowMs, max }) {
+    const attempts = new Map();
+
+    return (req, res, next) => {
+        const key = `${req.ip}:${normalizeEmail(req.body && req.body.email)}`;
+        const now = Date.now();
+        const current = attempts.get(key);
+        const entry = current && current.resetAt > now
+            ? current
+            : { count: 0, resetAt: now + windowMs };
+
+        entry.count += 1;
+        attempts.set(key, entry);
+
+        if (entry.count > max) {
+            const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+            res.setHeader('Retry-After', String(retryAfter));
+            return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
+        }
+
+        next();
+    };
+}
+
+function establishSession(req, user) {
+    return new Promise((resolve, reject) => {
+        req.session.regenerate((err) => {
+            if (err) return reject(err);
+            req.session.userId = user.id;
+            req.session.role = user.role;
+            req.session.email = user.email;
+            resolve();
+        });
+    });
+}
+
+const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
 
 function slugify(value) {
     return String(value || '')
@@ -184,11 +264,16 @@ function ensureDefaultHelpArticles() {
 
 // --- Auth Routes ---
 
-app.post('/api/auth/register', async (req, res) => {
-    const { email, password } = req.body;
+app.post('/api/auth/register', authRateLimit, async (req, res) => {
+    const body = req.body || {};
+    const email = normalizeEmail(body.email);
+    const { password } = body;
 
-    if (!email || !password || password.length < 8) {
+    if (!isValidEmail(email) || !password || password.length < 8) {
         return res.status(400).json({ error: 'Invalid email or password (min 8 characters).' });
+    }
+    if (password.length > 128) {
+        return res.status(400).json({ error: 'Password is too long.' });
     }
 
     try {
@@ -196,13 +281,11 @@ app.post('/api/auth/register', async (req, res) => {
         const result = db.transaction(() => {
             const stmt = db.prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)');
             const userInfo = stmt.run(email, hash, 'restaurant_owner');
-            const restaurant = createRestaurantForOwner(userInfo.lastInsertRowid, { ...req.body, email });
+            const restaurant = createRestaurantForOwner(userInfo.lastInsertRowid, { ...body, email });
             return { userId: userInfo.lastInsertRowid, restaurant };
         })();
 
-        req.session.userId = result.userId;
-        req.session.role = 'restaurant_owner';
-        req.session.email = email;
+        await establishSession(req, { id: result.userId, role: 'restaurant_owner', email });
 
         res.json({
             success: true,
@@ -220,8 +303,14 @@ app.post('/api/auth/register', async (req, res) => {
     }
 });
 
-app.post('/api/auth/login', async (req, res) => {
-    const { email, password } = req.body;
+app.post('/api/auth/login', authRateLimit, async (req, res) => {
+    const body = req.body || {};
+    const email = normalizeEmail(body.email);
+    const { password } = body;
+
+    if (!isValidEmail(email) || !password || password.length > 128) {
+        return res.status(401).json({ error: 'Invalid credentials.' });
+    }
 
     try {
         const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
@@ -234,9 +323,7 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials.' });
         }
 
-        req.session.userId = user.id;
-        req.session.role = user.role;
-        req.session.email = user.email;
+        await establishSession(req, { id: user.id, role: user.role, email: user.email });
 
         res.json({ success: true, user: { email: user.email, role: user.role } });
     } catch (error) {
@@ -245,8 +332,10 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-    req.session.destroy();
-    res.json({ success: true });
+    req.session.destroy(() => {
+        res.clearCookie(SESSION_COOKIE_NAME);
+        res.json({ success: true });
+    });
 });
 
 app.get('/api/auth/me', (req, res) => {

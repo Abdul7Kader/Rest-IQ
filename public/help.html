@@ -52,9 +52,9 @@
                 const card = document.createElement('div');
                 card.className = 'card article-card';
                 card.innerHTML = `
-                    <div class="badge badge-free" style="margin-bottom: 1rem;">${a.article_type.toUpperCase()}</div>
-                    <h3>${a.title}</h3>
-                    <p style="font-size: 0.875rem; color: var(--text-muted);">Erfahren Sie mehr über ${a.title.toLowerCase()}.</p>
+                    <div class="badge badge-free" style="margin-bottom: 1rem;">${escapeHtml(a.article_type.toUpperCase())}</div>
+                    <h3>${escapeHtml(a.title)}</h3>
+                    <p style="font-size: 0.875rem; color: var(--text-muted);">Erfahren Sie mehr über ${escapeHtml(a.title.toLowerCase())}.</p>
                 `;
                 card.onclick = () => loadDetail(a.id);
                 list.appendChild(card);
@@ -104,31 +104,40 @@
                 }
                 if (trimmed.startsWith('## ')) {
                     closeList();
-                    html += `<h2>${trimmed.slice(3)}</h2>`;
+                    html += `<h2>${escapeHtml(trimmed.slice(3))}</h2>`;
                 } else if (trimmed.startsWith('# ')) {
                     closeList();
-                    html += `<h1>${trimmed.slice(2)}</h1>`;
+                    html += `<h1>${escapeHtml(trimmed.slice(2))}</h1>`;
                 } else if (/^\d+\.\s/.test(trimmed)) {
                     if (listType !== 'ol') {
                         closeList();
                         listType = 'ol';
                         html += '<ol>';
                     }
-                    html += `<li>${trimmed.replace(/^\d+\.\s/, '')}</li>`;
+                    html += `<li>${escapeHtml(trimmed.replace(/^\d+\.\s/, ''))}</li>`;
                 } else if (trimmed.startsWith('- ')) {
                     if (listType !== 'ul') {
                         closeList();
                         listType = 'ul';
                         html += '<ul>';
                     }
-                    html += `<li>${trimmed.slice(2)}</li>`;
+                    html += `<li>${escapeHtml(trimmed.slice(2))}</li>`;
                 } else {
                     closeList();
-                    html += `<p>${trimmed}</p>`;
+                    html += `<p>${escapeHtml(trimmed)}</p>`;
                 }
             }
             closeList();
             return html;
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         // Check if back button should go to Admin or Dashboard

@@ -14,7 +14,7 @@ const Renderer = {
         const templateKey = siteConfig.template || 'free_default';
         
         // 1. Update global styles (accent color)
-        document.documentElement.style.setProperty('--accent', siteConfig.accentColor || '#2563eb');
+        document.documentElement.style.setProperty('--accent', Renderer.utils.safeCssColor(siteConfig.accentColor));
 
         // 2. Clear container
         container.innerHTML = '';
@@ -42,6 +42,36 @@ const Renderer = {
      * @param {Object} flags View-Model flags
      */
     utils: {
+        escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
+        safeUrl(value) {
+            const url = String(value || '').trim();
+            if (!url) return '';
+            try {
+                const parsed = new URL(url, window.location.origin);
+                if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+                    return parsed.href;
+                }
+                if (/^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(url)) return url;
+            } catch (error) {
+                return '';
+            }
+            return '';
+        },
+        safeCssColor(value, fallback = '#2563eb') {
+            const color = String(value || '').trim();
+            return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color) ? color : fallback;
+        },
+        imageStyle(url) {
+            const safe = this.safeUrl(url);
+            return safe ? `url('${safe.replace(/'/g, '%27')}')` : '#f1f5f9';
+        },
         adSlot(type, flags) {
             if (!flags || !flags.adsEnabled) return '';
             
@@ -72,11 +102,11 @@ const Renderer = {
                 const h = hours.find(x => x.day === i);
                 let timeStr = 'Geschlossen';
                 if (h && !h.isClosed) {
-                    timeStr = h.slots.map(s => `${s.open} - ${s.close}`).join('<br>');
+                    timeStr = h.slots.map(s => `${this.escapeHtml(s.open)} - ${this.escapeHtml(s.close)}`).join('<br>');
                 }
                 html += `
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9;">
-                        <span>${day}</span>
+                        <span>${this.escapeHtml(day)}</span>
                         <span style="text-align: right;">${timeStr}</span>
                     </div>
                 `;

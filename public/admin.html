@@ -84,22 +84,22 @@
                 tr.style.borderBottom = '1px solid var(--border)';
                 tr.innerHTML = `
                     <td style="padding: 1rem;">
-                        <strong>${r.restaurant_name}</strong><br>
-                        <small style="color:var(--text-muted)">${r.public_slug_internal}</small><br>
-                        <small style="color:var(--text-muted)">Template: ${r.template_key || 'free_default'}</small>
+                        <strong>${escapeHtml(r.restaurant_name)}</strong><br>
+                        <small style="color:var(--text-muted)">${escapeHtml(r.public_slug_internal)}</small><br>
+                        <small style="color:var(--text-muted)">Template: ${escapeHtml(r.template_key || 'free_default')}</small>
                     </td>
                     <td style="padding: 1rem;">
-                        ${r.owner_email}<br>
+                        ${escapeHtml(r.owner_email)}<br>
                         <small style="color: ${r.is_active ? 'var(--success)' : 'var(--error)'}">${r.is_active ? 'Aktiv' : 'Inaktiv'}</small>
                     </td>
-                    <td style="padding: 1rem;"><span class="badge badge-${r.current_plan}">${r.current_plan.toUpperCase()}</span></td>
+                    <td style="padding: 1rem;"><span class="badge badge-${escapeHtml(r.current_plan)}">${escapeHtml(r.current_plan.toUpperCase())}</span></td>
                     <td style="padding: 1rem;">
                         <span class="status-pill ${publishedClass}">${published ? 'published' : 'draft'}</span><br>
-                        <small style="color:var(--text-muted)">${r.last_publish_status ? `letztes Event: ${r.last_publish_status}` : 'kein Publish-Event'}</small>
+                        <small style="color:var(--text-muted)">${r.last_publish_status ? `letztes Event: ${escapeHtml(r.last_publish_status)}` : 'kein Publish-Event'}</small>
                     </td>
                     <td style="padding: 1rem;">
-                        <span class="status-pill ${domainClass}">${domainStatus}</span><br>
-                        <small style="color:var(--text-muted)">${r.free_hostname || `${r.public_slug_internal}-restiq.pages.dev`}</small>
+                        <span class="status-pill ${domainClass}">${escapeHtml(domainStatus)}</span><br>
+                        <small style="color:var(--text-muted)">${escapeHtml(r.free_hostname || `${r.public_slug_internal}-restiq.pages.dev`)}</small>
                     </td>
                     <td style="padding: 1rem;">
                         <div class="admin-actions">
@@ -125,7 +125,7 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    alertBox.innerHTML = `Cloudflare-Export vorbereitet: <code>${data.targetHostname}</code>`;
+                    alertBox.innerHTML = `Cloudflare-Export vorbereitet: <code>${escapeHtml(data.targetHostname)}</code>`;
                     alertBox.className = 'alert alert-success';
                     alertBox.classList.remove('hidden');
                     await loadRestaurants();
@@ -142,6 +142,15 @@
                 button.disabled = false;
                 button.textContent = originalText;
             }
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         document.getElementById('logoutBtn').addEventListener('click', async (e) => {

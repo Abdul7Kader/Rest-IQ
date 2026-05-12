@@ -404,7 +404,7 @@
                 catEl.className = 'menu-cat';
                 catEl.innerHTML = `
                     <div style="display: flex; justify-content: space-between;">
-                        <h3>${cat.category_name} (${cat.display_mode})</h3>
+                        <h3>${escapeHtml(cat.category_name)} (${escapeHtml(cat.display_mode)})</h3>
                         <div>
                             <button class="btn-sm secondary" onclick="editCategory(${JSON.stringify(cat).replace(/"/g, '&quot;')})">Bearbeiten</button>
                             <button class="btn-sm" onclick="addDish(${cat.id})">+ Gericht</button>
@@ -417,10 +417,10 @@
                     dishEl.className = 'menu-item';
                     dishEl.innerHTML = `
                         <div style="display: flex; justify-content: space-between;">
-                            <strong>${dish.dish_name} - ${(dish.price_cents / 100).toFixed(2)}€</strong>
+                            <strong>${escapeHtml(dish.dish_name)} - ${escapeHtml((dish.price_cents / 100).toFixed(2))}€</strong>
                             <button class="btn-sm secondary" onclick="editDish(${JSON.stringify(dish).replace(/"/g, '&quot;')})">Edit</button>
                         </div>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">${dish.description_text}</p>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(dish.description_text)}</p>
                     `;
                     catEl.appendChild(dishEl);
                 });
@@ -493,6 +493,15 @@
 
         // --- Utils ---
 
+        function escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function showSuccess() {
             const s = document.getElementById('success');
             s.classList.remove('hidden');
@@ -527,7 +536,7 @@
             const container = document.getElementById('helpArticles');
             container.innerHTML = '';
             articles.forEach(a => {
-                container.innerHTML += `<div class="card"><div class="badge badge-free" style="margin-bottom: 1rem;">${a.article_type.toUpperCase()}</div><h3>${a.title}</h3><a href="/help.html?article=${a.id}">Lesen</a></div>`;
+                container.innerHTML += `<div class="card"><div class="badge badge-free" style="margin-bottom: 1rem;">${escapeHtml(a.article_type.toUpperCase())}</div><h3>${escapeHtml(a.title)}</h3><a href="/help.html?article=${encodeURIComponent(a.id)}">Lesen</a></div>`;
             });
         }
 
