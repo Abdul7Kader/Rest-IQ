@@ -779,10 +779,26 @@ app.post('/api/admin/cf-prepare/:restaurantId', isAuthenticated, hasRole('platfo
 
 app.get('/api/admin/restaurants', isAuthenticated, hasRole('platform_admin'), (req, res) => {
     const query = `
-        SELECT r.*, u.email as owner_email, s.current_plan 
+        SELECT r.*, u.email as owner_email, s.current_plan, s.is_published,
+               s.template_key, d.hostname as free_hostname, d.status as free_domain_status,
+               pe.status as last_publish_status, pe.created_at as last_publish_at,
+               pe.message as last_publish_message
         FROM restaurants r
         JOIN users u ON r.owner_user_id = u.id
         JOIN site_configs s ON r.id = s.restaurant_id
+        LEFT JOIN site_domains d ON d.id = (
+            SELECT id FROM site_domains
+            WHERE restaurant_id = r.id AND domain_type = 'free_generated'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        )
+        LEFT JOIN publish_events pe ON pe.id = (
+            SELECT id FROM publish_events
+            WHERE restaurant_id = r.id
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        )
+        ORDER BY r.created_at DESC
     `;
     const restaurants = db.prepare(query).all();
     res.json(restaurants);

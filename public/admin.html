@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin - Restiq</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .admin-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .admin-actions a, .admin-actions button { font-size: 0.8rem; padding: 0.4rem 0.6rem; text-decoration: none; border-radius: 4px; }
+        .admin-actions a { background: var(--bg); color: var(--primary); border: 1px solid var(--border); }
+        .status-pill { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
+        .status-ok { background: #dcfce7; color: #166534; }
+        .status-warn { background: #fef3c7; color: #92400e; }
+        .status-muted { background: #e2e8f0; color: #475569; }
+        .admin-note { margin-bottom: 1rem; color: var(--text-muted); }
+    </style>
 </head>
 <body>
     <div class="container" style="max-width: 1000px;">
@@ -16,6 +26,8 @@
         </div>
 
         <h1>Alle Restaurants</h1>
+        <p class="admin-note">Operative Übersicht für Owner-Zustand, lokale Veröffentlichung und vorbereiteten Free-Hostname.</p>
+        <div id="alert" class="alert hidden"></div>
         
         <div class="card" style="padding: 0; overflow-x: auto;">
             <table style="width: 100%; border-collapse: collapse;">
@@ -24,8 +36,9 @@
                         <th style="padding: 1rem; text-align: left;">Restaurant Name</th>
                         <th style="padding: 1rem; text-align: left;">Inhaber (Email)</th>
                         <th style="padding: 1rem; text-align: left;">Tarif</th>
-                        <th style="padding: 1rem; text-align: left;">Status</th>
-                        <th style="padding: 1rem; text-align: left;">Erstellt am</th>
+                        <th style="padding: 1rem; text-align: left;">Veröffentlichung</th>
+                        <th style="padding: 1rem; text-align: left;">Free Hostname</th>
+                        <th style="padding: 1rem; text-align: left;">Aktionen</th>
                     </tr>
                 </thead>
                 <tbody id="restaurantTable">
@@ -48,17 +61,86 @@
             const table = document.getElementById('restaurantTable');
             table.innerHTML = '';
 
+            if (restaurants.length === 0) {
+                table.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                            Noch keine Restaurants vorhanden.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
             for (const r of restaurants) {
+                const published = r.is_published === 1;
+                const domainStatus = r.free_domain_status || 'nicht vorbereitet';
+                const domainClass = domainStatus === 'active' ? 'status-ok' : (domainStatus === 'pending' ? 'status-warn' : 'status-muted');
+                const publishedClass = published ? 'status-ok' : 'status-muted';
+                const publishedLink = published
+                    ? `<a href="/published/${r.public_slug_internal}" target="_blank">Published</a>`
+                    : '';
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid var(--border)';
                 tr.innerHTML = `
-                    <td style="padding: 1rem;"><strong>${r.restaurant_name}</strong><br><small style="color:var(--text-muted)">${r.public_slug_internal}</small></td>
-                    <td style="padding: 1rem;">${r.owner_email}</td>
+                    <td style="padding: 1rem;">
+                        <strong>${r.restaurant_name}</strong><br>
+                        <small style="color:var(--text-muted)">${r.public_slug_internal}</small><br>
+                        <small style="color:var(--text-muted)">Template: ${r.template_key || 'free_default'}</small>
+                    </td>
+                    <td style="padding: 1rem;">
+                        ${r.owner_email}<br>
+                        <small style="color: ${r.is_active ? 'var(--success)' : 'var(--error)'}">${r.is_active ? 'Aktiv' : 'Inaktiv'}</small>
+                    </td>
                     <td style="padding: 1rem;"><span class="badge badge-${r.current_plan}">${r.current_plan.toUpperCase()}</span></td>
-                    <td style="padding: 1rem;"><span style="color: ${r.is_active ? 'var(--success)' : 'var(--error)'}">${r.is_active ? 'Aktiv' : 'Inaktiv'}</span></td>
-                    <td style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">${new Date(r.created_at).toLocaleDateString()}</td>
+                    <td style="padding: 1rem;">
+                        <span class="status-pill ${publishedClass}">${published ? 'published' : 'draft'}</span><br>
+                        <small style="color:var(--text-muted)">${r.last_publish_status ? `letztes Event: ${r.last_publish_status}` : 'kein Publish-Event'}</small>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <span class="status-pill ${domainClass}">${domainStatus}</span><br>
+                        <small style="color:var(--text-muted)">${r.free_hostname || `${r.public_slug_internal}-restiq.pages.dev`}</small>
+                    </td>
+                    <td style="padding: 1rem;">
+                        <div class="admin-actions">
+                            <a href="/preview/${r.id}" target="_blank">Preview</a>
+                            ${publishedLink}
+                            <button type="button" onclick="prepareCf(${r.id}, this)">CF vorbereiten</button>
+                        </div>
+                    </td>
                 `;
                 table.appendChild(tr);
+            }
+        }
+
+        async function prepareCf(restaurantId, button) {
+            const alertBox = document.getElementById('alert');
+            const originalText = button.textContent;
+            button.disabled = true;
+            button.textContent = 'Bereite vor...';
+            alertBox.className = 'alert hidden';
+
+            try {
+                const res = await fetch(`/api/admin/cf-prepare/${restaurantId}`, { method: 'POST' });
+                const data = await res.json();
+
+                if (res.ok) {
+                    alertBox.innerHTML = `Cloudflare-Export vorbereitet: <code>${data.targetHostname}</code>`;
+                    alertBox.className = 'alert alert-success';
+                    alertBox.classList.remove('hidden');
+                    await loadRestaurants();
+                } else {
+                    alertBox.textContent = data.error || 'Cloudflare-Vorbereitung fehlgeschlagen.';
+                    alertBox.className = 'alert alert-error';
+                    alertBox.classList.remove('hidden');
+                }
+            } catch (error) {
+                alertBox.textContent = 'Serverfehler bei der Cloudflare-Vorbereitung.';
+                alertBox.className = 'alert alert-error';
+                alertBox.classList.remove('hidden');
+            } finally {
+                button.disabled = false;
+                button.textContent = originalText;
             }
         }
 
