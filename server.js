@@ -98,6 +98,90 @@ function createRestaurantForOwner(ownerUserId, payload) {
     return { id: restaurantId, slug };
 }
 
+const DEFAULT_HELP_ARTICLES = [
+    {
+        article_type: 'tutorial',
+        title: 'Schnellstart: Von Grunddaten bis Veröffentlichung',
+        slug: 'schnellstart-veroeffentlichung',
+        sort_order: 0,
+        content_markdown: [
+            '# Schnellstart',
+            'Dieser Ablauf bringt Ihre kostenlose Restaurantseite in eine testbare Veröffentlichung.',
+            '',
+            '1. Prüfen Sie im Bereich Grunddaten Name, Beschreibung, Kontakt und Adresse.',
+            '2. Tragen Sie im Bereich Öffnungszeiten die regulären Zeiten ein.',
+            '3. Legen Sie in der Speisekarte Kategorien und Gerichte an.',
+            '4. Passen Sie unter Design & Hero die Überschrift, Farbe und Bilder an.',
+            '5. Öffnen Sie die Vorschau und prüfen Sie die Seite.',
+            '6. Klicken Sie auf Lokal Veröffentlichen.',
+            '',
+            'Die lokale Veröffentlichung ist noch kein echtes externes Cloudflare-Deployment. Sie ist der technische Zwischenstand, den Sie prüfen können.'
+        ].join('\n')
+    },
+    {
+        article_type: 'help',
+        title: 'Was bedeutet Vorschau, Published und Cloudflare?',
+        slug: 'preview-published-cloudflare',
+        sort_order: 1,
+        content_markdown: [
+            '# Vorschau, Published und Cloudflare',
+            'Die Vorschau zeigt die aktuelle interne Darstellung im Dashboard. Sie ist nur für angemeldete Nutzer gedacht.',
+            '',
+            'Published ist die lokal erzeugte statische Seite. Sie ist ohne Login unter /published/<slug> erreichbar.',
+            '',
+            'Cloudflare vorbereiten erzeugt einen Export-Ordner für den späteren manuellen Upload. Dieser Schritt verbindet noch keine echte Domain automatisch.'
+        ].join('\n')
+    },
+    {
+        article_type: 'tutorial',
+        title: 'Speisekarte sinnvoll strukturieren',
+        slug: 'speisekarte-strukturieren',
+        sort_order: 2,
+        content_markdown: [
+            '# Speisekarte strukturieren',
+            'Arbeiten Sie zuerst mit wenigen klaren Kategorien, zum Beispiel Vorspeisen, Pizza, Pasta, Getränke.',
+            '',
+            'Für jedes Gericht sollten Name, Preis und Beschreibung gepflegt sein. Zutaten und Allergene sind eigene Felder, damit sie später besser dargestellt oder gefiltert werden können.',
+            '',
+            'Nutzen Sie Bilder nur, wenn sie wirklich zum Gericht passen und zuverlässig über eine URL erreichbar sind.'
+        ].join('\n')
+    },
+    {
+        article_type: 'faq',
+        title: 'Was ist in der kostenlosen Stufe enthalten?',
+        slug: 'kostenlose-stufe',
+        sort_order: 3,
+        content_markdown: [
+            '# Kostenlose Stufe',
+            'Die kostenlose Stufe enthält eine selbst konfigurierte Restaurantseite mit Restiq-Branding, Werbeplatzhaltern und Spendenhinweis.',
+            '',
+            'Nicht enthalten sind eine eigene Kundendomain, werbefreie Darstellung, individuelle Designentwicklung, inhaltliche Pflege durch Restiq oder Domain-Support.'
+        ].join('\n')
+    }
+];
+
+function ensureDefaultHelpArticles() {
+    const upsert = db.prepare(`
+        INSERT INTO help_articles (article_type, title, slug, content_markdown, sort_order, is_published)
+        VALUES (@article_type, @title, @slug, @content_markdown, @sort_order, 1)
+        ON CONFLICT(slug) DO UPDATE SET
+            article_type = excluded.article_type,
+            title = excluded.title,
+            content_markdown = excluded.content_markdown,
+            sort_order = excluded.sort_order,
+            is_published = 1,
+            updated_at = CURRENT_TIMESTAMP
+    `);
+
+    const transaction = db.transaction(() => {
+        db.prepare("DELETE FROM help_articles WHERE slug IN ('erste-schritte', 'menue-bearbeiten')").run();
+        for (const article of DEFAULT_HELP_ARTICLES) {
+            upsert.run(article);
+        }
+    });
+    transaction();
+}
+
 // --- Auth Routes ---
 
 app.post('/api/auth/register', async (req, res) => {
@@ -282,6 +366,75 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         lastPublishAt: restaurant.last_publish_at,
         lastPublishMessage: restaurant.last_publish_message,
         nextStep
+    });
+});
+
+app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = db.prepare(`
+        SELECT r.id, r.restaurant_name, r.short_description, r.contact_email,
+               r.contact_phone, r.street, r.city, s.is_published, s.hero_title,
+               s.hero_subtitle, s.about_text, s.logo_image_url, s.hero_image_url,
+               d.status as free_domain_status
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+        LEFT JOIN site_domains d ON d.id = (
+            SELECT id FROM site_domains
+            WHERE restaurant_id = r.id AND domain_type = 'free_generated'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        )
+        WHERE r.owner_user_id = ?
+    `).get(req.session.userId);
+
+    if (!restaurant) {
+        return res.status(404).json({ error: 'Restaurant not found.' });
+    }
+
+    const openingHoursCount = db.prepare('SELECT COUNT(*) as count FROM opening_hours WHERE restaurant_id = ?').get(restaurant.id).count;
+    const menuStats = db.prepare(`
+        SELECT COUNT(DISTINCT mc.id) as categories, COUNT(d.id) as dishes
+        FROM menus m
+        LEFT JOIN menu_categories mc ON mc.menu_id = m.id
+        LEFT JOIN dishes d ON d.category_id = mc.id
+        WHERE m.restaurant_id = ? AND m.is_active = 1
+    `).get(restaurant.id);
+
+    const hasBasics = Boolean(
+        restaurant.restaurant_name &&
+        restaurant.short_description &&
+        restaurant.contact_email &&
+        restaurant.contact_phone &&
+        restaurant.street &&
+        restaurant.city
+    );
+    const hasDesign = Boolean(restaurant.hero_title || restaurant.hero_subtitle || restaurant.about_text || restaurant.logo_image_url || restaurant.hero_image_url);
+    const hasMenu = menuStats.categories > 0 && menuStats.dishes > 0;
+    const hasHours = openingHoursCount >= 7;
+    const isPublished = restaurant.is_published === 1;
+    const cfPrepared = restaurant.free_domain_status === 'pending' || restaurant.free_domain_status === 'active';
+
+    const steps = [
+        { key: 'basics', label: 'Grunddaten vervollständigen', done: hasBasics, targetTab: 'base' },
+        { key: 'hours', label: 'Öffnungszeiten prüfen', done: hasHours, targetTab: 'hours' },
+        { key: 'menu', label: 'Speisekarte mit Kategorien und Gerichten pflegen', done: hasMenu, targetTab: 'menu' },
+        { key: 'design', label: 'Design, Hero und Beschreibung prüfen', done: hasDesign, targetTab: 'design' },
+        { key: 'preview', label: 'Vorschau öffnen und Seite kontrollieren', done: isPublished, url: '/preview' },
+        { key: 'publish', label: 'Lokal veröffentlichen', done: isPublished, action: 'publish' },
+        { key: 'cloudflare', label: 'Cloudflare-Export vorbereiten', done: cfPrepared, action: 'cf-prepare' }
+    ];
+
+    const completed = steps.filter(step => step.done).length;
+    const next = steps.find(step => !step.done) || {
+        key: 'complete',
+        label: 'Alle Schritte geprüft',
+        done: true
+    };
+
+    res.json({
+        completed,
+        total: steps.length,
+        next,
+        steps
     });
 });
 
@@ -871,6 +1024,8 @@ app.get('/api/help/articles/:id', (req, res) => {
     if (!article) return res.status(404).json({ error: 'Article not found.' });
     res.json(article);
 });
+
+ensureDefaultHelpArticles();
 
 app.listen(port, () => {
     console.log(`Restiq running at http://localhost:${port}`);
