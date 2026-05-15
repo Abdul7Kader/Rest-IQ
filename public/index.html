@@ -3,39 +3,252 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Restiq</title>
+    <title>RestIQ - Restaurant-Webseiten einfach veröffentlichen</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        body { background: #f6f7fb; }
+        .landing-shell { min-height: 100vh; }
+        .topbar {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: rgba(255,255,255,0.96);
+            border-bottom: 1px solid var(--border);
+        }
+        .topbar-inner {
+            max-width: 1180px;
+            margin: 0 auto;
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 1rem;
+        }
+        .brand { font-weight: 800; color: var(--primary); font-size: 1.35rem; text-decoration: none; }
+        .topnav { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .topnav a { color: var(--text); text-decoration: none; font-size: 0.95rem; }
+        .button-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: white !important;
+            padding: 0.75rem 1rem;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .button-link.secondary {
+            background: white;
+            color: var(--primary) !important;
+            border: 1px solid var(--border);
+        }
+        .hero {
+            min-height: calc(100vh - 72px);
+            background:
+                linear-gradient(90deg, rgba(15,23,42,0.82), rgba(15,23,42,0.48), rgba(15,23,42,0.15)),
+                url('https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=1800&q=80');
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+            color: white;
+        }
+        .hero-inner {
+            width: min(1180px, 100%);
+            margin: 0 auto;
+            padding: 3rem 1rem;
+            display: grid;
+            grid-template-columns: minmax(0, 1.35fr) 420px;
+            gap: 2rem;
+            align-items: center;
+        }
+        .hero h1 {
+            font-size: clamp(2.25rem, 6vw, 5rem);
+            line-height: 1;
+            max-width: 820px;
+            margin-bottom: 1.25rem;
+            letter-spacing: 0;
+        }
+        .hero-copy { font-size: 1.2rem; max-width: 680px; color: rgba(255,255,255,0.9); margin-bottom: 1.5rem; }
+        .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .login-panel { background: white; color: var(--text); border-radius: 8px; padding: 1.5rem; box-shadow: 0 24px 80px rgba(15,23,42,0.28); }
+        .section { padding: 4rem 1rem; }
+        .section-inner { max-width: 1180px; margin: 0 auto; }
+        .section-head { max-width: 720px; margin-bottom: 2rem; }
+        .section-head p { color: var(--text-muted); font-size: 1.05rem; }
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; }
+        .feature-card { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; }
+        .feature-card h3 { margin-bottom: 0.5rem; }
+        .feature-card p, .feature-card li { color: var(--text-muted); }
+        .steps { counter-reset: steps; display: grid; gap: 1rem; }
+        .step {
+            counter-increment: steps;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+            display: grid;
+            grid-template-columns: 44px 1fr;
+            gap: 1rem;
+            align-items: start;
+        }
+        .step::before {
+            content: counter(steps);
+            width: 36px;
+            height: 36px;
+            display: grid;
+            place-items: center;
+            background: var(--primary);
+            color: white;
+            border-radius: 999px;
+            font-weight: 800;
+        }
+        .pricing-card { display: flex; flex-direction: column; gap: 1rem; }
+        .pricing-card ul { padding-left: 1.1rem; display: grid; gap: 0.5rem; }
+        .domain-band { background: #101827; color: white; }
+        .domain-band p { color: rgba(255,255,255,0.78); }
+        .footer { padding: 2rem 1rem; border-top: 1px solid var(--border); color: var(--text-muted); background: white; }
+        .footer-inner { max-width: 1180px; margin: 0 auto; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+        .test-box { margin-top: 1rem; padding: 0.85rem; border: 1px dashed var(--border); border-radius: 8px; font-size: 0.8rem; color: var(--text-muted); background: #f8fafc; }
+        @media (max-width: 900px) {
+            .hero { min-height: auto; }
+            .hero-inner { grid-template-columns: 1fr; padding-top: 2rem; }
+            .topnav a:not(.button-link) { display: none; }
+        }
+    </style>
 </head>
 <body>
-    <div class="container" style="max-width: 400px; margin-top: 5rem;">
-        <div class="card">
-            <h1>Restiq</h1>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Anmelden, um Ihr Restaurant zu verwalten.</p>
-            
-            <div id="alert" class="alert alert-error hidden"></div>
+    <div class="landing-shell">
+        <header class="topbar">
+            <div class="topbar-inner">
+                <a class="brand" href="index.html">RestIQ</a>
+                <nav class="topnav">
+                    <a href="#funktionen">Funktionen</a>
+                    <a href="#tarife">Tarife</a>
+                    <a href="#domains">Domains</a>
+                    <a href="#login">Login</a>
+                    <a class="button-link" href="register.html">Account erstellen</a>
+                </nav>
+            </div>
+        </header>
 
-            <form id="loginForm">
-                <div class="form-group">
-                    <label for="email">E-Mail Adresse</label>
-                    <input type="email" id="email" required placeholder="name@beispiel.de">
+        <section class="hero">
+            <div class="hero-inner">
+                <div>
+                    <h1>Die Restaurantseite, die der Inhaber selbst pflegen kann.</h1>
+                    <p class="hero-copy">RestIQ ist eine Self-Service-Plattform für Restaurants: anmelden, Tarif wählen, Domain-Option festlegen, Speisekarte und Öffnungszeiten pflegen, Design wählen und die eigene Seite veröffentlichen.</p>
+                    <div class="hero-actions">
+                        <a class="button-link" href="register.html">Restaurant anlegen</a>
+                        <a class="button-link secondary" href="#ablauf">Ablauf ansehen</a>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="password">Passwort</label>
-                    <input type="password" id="password" required placeholder="••••••••">
-                </div>
-                <button type="submit" style="width: 100%;">Anmelden</button>
-            </form>
 
-            <p style="margin-top: 1.5rem; text-align: center; font-size: 0.875rem;">
-                Noch kein Konto? <a href="register.html">Jetzt registrieren</a>
-            </p>
-        </div>
-        
-        <div style="margin-top: 2rem; padding: 1rem; border: 1px dashed var(--border); border-radius: 8px; font-size: 0.8rem; color: var(--text-muted);">
-            <strong>Test-Zugangsdaten:</strong><br>
-            Admin: admin@restiq.app / admin123<br>
-            Owner: mario@trattoria-mario.de / owner123
-        </div>
+                <div id="login" class="login-panel">
+                    <h2>Anmelden</h2>
+                    <p style="color: var(--text-muted); margin-bottom: 1rem;">Für Restaurantinhaber und Plattform-Admin.</p>
+                    <div id="alert" class="alert alert-error hidden"></div>
+                    <form id="loginForm">
+                        <div class="form-group">
+                            <label for="email">E-Mail Adresse</label>
+                            <input type="email" id="email" required placeholder="name@beispiel.de" autocomplete="email">
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Passwort</label>
+                            <input type="password" id="password" required placeholder="Passwort" autocomplete="current-password">
+                        </div>
+                        <button type="submit" style="width: 100%;">Anmelden</button>
+                    </form>
+                    <p style="margin-top: 1rem; text-align: center; font-size: 0.875rem;">Noch kein Konto? <a href="register.html">Jetzt registrieren</a></p>
+                    <div class="test-box">
+                        <strong>Test-Zugangsdaten:</strong><br>
+                        Admin: admin@restiq.app / admin123<br>
+                        Owner: mario@trattoria-mario.de / owner123
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="funktionen" class="section">
+            <div class="section-inner">
+                <div class="section-head">
+                    <h2>Was Restaurantbesitzer in RestIQ verwalten</h2>
+                    <p>Der öffentliche Restaurantauftritt ist getrennt vom Admin-Zugang. Im Admin-Bereich werden Inhalte gepflegt; die veröffentlichte Website zeigt nur das Ergebnis.</p>
+                </div>
+                <div class="feature-grid">
+                    <div class="feature-card"><h3>Speisekarte</h3><p>Kategorien, Gerichte, Preise, Beschreibungen, Zutaten, Allergene, Badge-Texte und Bild-URLs.</p></div>
+                    <div class="feature-card"><h3>Öffnungszeiten</h3><p>Reguläre Wochenzeiten, zwei Zeitfenster pro Tag, Notizen sowie Urlaub und Sonderschließungen.</p></div>
+                    <div class="feature-card"><h3>Design</h3><p>Template, Hero-Texte, Akzentfarbe, Logo, Hero-Bild und Footer-Notiz ohne freie Code-Eingaben.</p></div>
+                    <div class="feature-card"><h3>Veröffentlichung</h3><p>Vorschau, lokale Veröffentlichung und Cloudflare-Export-Vorbereitung für den Live-Betrieb.</p></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="ablauf" class="section" style="padding-top: 0;">
+            <div class="section-inner">
+                <div class="section-head">
+                    <h2>So startet ein Restaurant mit RestIQ</h2>
+                    <p>Der Einstieg führt vom Konto über Tarif und Domain bis in den Admin-Arbeitsbereich.</p>
+                </div>
+                <div class="steps">
+                    <div class="step"><div><h3>Account erstellen</h3><p>Restaurantbesitzer legen Zugangsdaten und das erste Restaurantprofil an.</p></div></div>
+                    <div class="step"><div><h3>Tarif wählen</h3><p>Kostenlose Stufe mit Werbung oder werbefrei vorbereitete bezahlte Stufe.</p></div></div>
+                    <div class="step"><div><h3>Domain-Modell festlegen</h3><p>Kostenlose RestIQ-Adresse nutzen, Domain extern kaufen oder eigene Domain eintragen.</p></div></div>
+                    <div class="step"><div><h3>Admin-Bereich nutzen</h3><p>Speisekarte, Öffnungszeiten, Design und Veröffentlichungsstatus selbst verwalten.</p></div></div>
+                </div>
+            </div>
+        </section>
+
+        <section id="tarife" class="section">
+            <div class="section-inner">
+                <div class="section-head">
+                    <h2>Tarife</h2>
+                    <p>Die kostenlose Stufe hilft beim schnellen Start. Die bezahlte Stufe ist für einen werbefreien, professionelleren Auftritt vorbereitet.</p>
+                </div>
+                <div class="feature-grid">
+                    <div class="feature-card pricing-card">
+                        <h3>Kostenlos</h3>
+                        <ul>
+                            <li>RestIQ-Adresse</li>
+                            <li>Standard-Templates</li>
+                            <li>Werbeplätze und Spendenhinweis</li>
+                            <li>Selbstverwaltung im Owner-Admin</li>
+                        </ul>
+                        <a class="button-link" href="register.html">Kostenlos starten</a>
+                    </div>
+                    <div class="feature-card pricing-card">
+                        <h3>Werbefrei vorbereitet</h3>
+                        <ul>
+                            <li>Keine Werbung auf der Restaurantseite</li>
+                            <li>Kein Spendenhinweis</li>
+                            <li>Eigene Domain als Produktziel</li>
+                            <li>Payment-Anbindung folgt später</li>
+                        </ul>
+                        <a class="button-link secondary" href="register.html">Werbefrei wählen</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="domains" class="section domain-band">
+            <div class="section-inner">
+                <div class="section-head">
+                    <h2>Domains</h2>
+                    <p>Restaurants können mit einer kostenlosen RestIQ-Adresse starten. Wer eine eigene Domain möchte, kann sie extern kaufen und später in RestIQ eintragen. Die technische Eigentumsprüfung gehört in den späteren DNS-/Cloudflare-Schritt.</p>
+                </div>
+                <div class="hero-actions">
+                    <a class="button-link" href="register.html">Domain-Option wählen</a>
+                    <a class="button-link secondary" href="register.html">Account erstellen</a>
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <div class="footer-inner">
+                <strong>RestIQ</strong>
+                <span>Self-Service Restaurantseiten für Speisekarte, Öffnungszeiten, Design und Veröffentlichung.</span>
+            </div>
+        </footer>
     </div>
 
     <script>
@@ -70,17 +283,6 @@
                 alert.classList.remove('hidden');
             }
         });
-
-        // Check if already logged in
-        async function checkStatus() {
-            const res = await fetch('/api/auth/me');
-            if (res.ok) {
-                const user = await res.json();
-                if (user.role === 'platform_admin') window.location.href = 'admin.html';
-                else window.location.href = 'dashboard.html';
-            }
-        }
-        checkStatus();
     </script>
 </body>
 </html>
