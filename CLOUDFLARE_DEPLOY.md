@@ -4,14 +4,14 @@ Stand: Schritt 8 | Kostenlose Stufe (Free Plan)
 
 ---
 
-## Übersicht: Zwei Export-Ebenen
+## Übersicht: Interner Export und Cloudflare-Vorbereitung
 
 ```
-publish/<slug>/            ← Lokaler Filesystem-Export (Schritt 7)
+publish/<slug>/            ← Interner statischer Export des Servers
 cloudflare-export/<slug>/  ← Cloudflare Pages Vorbereitung (Schritt 8, neu)
 ```
 
-Beide Verzeichnisse sind im `.gitignore` und werden durch den Server generiert.
+Beide Verzeichnisse sind im `.gitignore` und werden durch den Server generiert. Restaurant-Owner können keine lokale öffentliche Veröffentlichung auslösen.
 
 ---
 
@@ -39,27 +39,18 @@ trattoria-mario-restiq.pages.dev
 
 ---
 
-## Ablauf: Lokaler Export → Cloudflare Pages
+## Ablauf: Cloudflare Pages vorbereiten
 
-### Schritt 1: Lokal veröffentlichen (bestehend)
-
-```
-POST /api/restaurant/publish
-```
-
-- Rendert ViewModel aus DB
-- Schreibt nach `publish/<slug>/`
-- Setzt `is_published = 1` in `site_configs`
-- Loggt in `publish_events` mit `target_hostname = 'local_filesystem'`
-
-### Schritt 2: Cloudflare Export vorbereiten (neu)
+### Schritt 1: Cloudflare Export vorbereiten
 
 ```
 POST /api/restaurant/cf-prepare
 ```
 
-- Prüft: `current_plan = 'free'` und `is_published = 1`
-- Kopiert `publish/<slug>/` → `cloudflare-export/<slug>/`
+- Prüft: `current_plan = 'free'`
+- Rendert serverseitig das ViewModel aus der Datenbank
+- Erzeugt intern `publish/<slug>/`
+- Kopiert den internen statischen Export nach `cloudflare-export/<slug>/`
 - Fügt Cloudflare Pages Meta-Dateien hinzu:
   - `_redirects` – Basis-Redirect-Regeln
   - `_headers` – Security + Cache-Control Header
@@ -101,7 +92,6 @@ node server.js
 Verfügbar unter:
 - Dashboard: http://localhost:3000/dashboard.html
 - Preview (Live): http://localhost:3000/preview
-- Publish API: POST http://localhost:3000/api/restaurant/publish
 - CF-Prepare API: POST http://localhost:3000/api/restaurant/cf-prepare
 
 ### Option B: Cloudflare Export lokal testen (neu)
@@ -151,23 +141,22 @@ npx wrangler pages deploy cloudflare-export/trattoria-mario --project-name=tratt
 
 ## publish_events Logging
 
-Beide Schritte protokollieren in `publish_events`:
+Der Cloudflare-Vorbereitungsschritt protokolliert in `publish_events`:
 
 | Schritt                   | trigger_type    | target_hostname                   | status  |
 |--------------------------|-----------------|----------------------------------|---------|
-| Lokal Publish             | `manual_update` | `local_filesystem`               | success |
 | Cloudflare Vorbereitung   | `manual_update` | `trattoria-mario-restiq.pages.dev` | success |
 
 ---
 
-## Unterschied: lokaler Export vs. Cloudflare-Export
+## Unterschied: interner Export vs. Cloudflare-Export
 
 | Aspekt              | `publish/<slug>/`             | `cloudflare-export/<slug>/`            |
 |--------------------|-------------------------------|----------------------------------------|
-| Zweck              | Lokale Vorschau / Archiv      | Deployment zu Cloudflare Pages         |
+| Zweck              | Internes Arbeitsverzeichnis des Servers | Deployment zu Cloudflare Pages |
 | Cloudflare-Dateien | ✗                             | `_redirects`, `_headers`, `deploy-info.json` |
 | Render-Logik       | identisch (Shared Assets)     | identisch (Shared Assets)              |
-| URL-Strategie      | lokal per npx serve           | `<slug>-restiq.pages.dev`            |
+| URL-Strategie      | keine öffentliche Owner-Route | `<slug>-restiq.pages.dev`              |
 
 ---
 

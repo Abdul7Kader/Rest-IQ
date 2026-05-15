@@ -26,7 +26,7 @@
         </div>
 
         <h1>Alle Restaurants</h1>
-        <p class="admin-note">Operative Übersicht für Owner-Zustand, lokale Veröffentlichung und vorbereiteten Free-Hostname.</p>
+        <p class="admin-note">Operative Übersicht für Owner-Zustand, Tarif, vorbereiteten Free-Hostname und Cloudflare-Export.</p>
         <div id="alert" class="alert hidden"></div>
         
         <div class="card" style="padding: 0; overflow-x: auto;">
@@ -36,7 +36,7 @@
                         <th style="padding: 1rem; text-align: left;">Restaurant Name</th>
                         <th style="padding: 1rem; text-align: left;">Inhaber (Email)</th>
                         <th style="padding: 1rem; text-align: left;">Tarif</th>
-                        <th style="padding: 1rem; text-align: left;">Veröffentlichung</th>
+                        <th style="padding: 1rem; text-align: left;">Deploy-Status</th>
                         <th style="padding: 1rem; text-align: left;">Free Hostname</th>
                         <th style="padding: 1rem; text-align: left;">Aktionen</th>
                     </tr>
@@ -73,13 +73,9 @@
             }
 
             for (const r of restaurants) {
-                const published = r.is_published === 1;
                 const domainStatus = r.free_domain_status || 'nicht vorbereitet';
                 const domainClass = domainStatus === 'active' ? 'status-ok' : (domainStatus === 'pending' ? 'status-warn' : 'status-muted');
-                const publishedClass = published ? 'status-ok' : 'status-muted';
-                const publishedLink = published
-                    ? `<a href="/published/${r.public_slug_internal}" target="_blank">Published</a>`
-                    : '';
+                const deployClass = r.last_publish_status === 'success' ? 'status-ok' : 'status-muted';
                 const tr = document.createElement('tr');
                 tr.style.borderBottom = '1px solid var(--border)';
                 tr.innerHTML = `
@@ -94,8 +90,8 @@
                     </td>
                     <td style="padding: 1rem;"><span class="badge badge-${escapeHtml(r.current_plan)}">${escapeHtml(r.current_plan.toUpperCase())}</span></td>
                     <td style="padding: 1rem;">
-                        <span class="status-pill ${publishedClass}">${published ? 'published' : 'draft'}</span><br>
-                        <small style="color:var(--text-muted)">${r.last_publish_status ? `letztes Event: ${escapeHtml(r.last_publish_status)}` : 'kein Publish-Event'}</small>
+                        <span class="status-pill ${deployClass}">${r.last_publish_status ? escapeHtml(r.last_publish_status) : 'nicht vorbereitet'}</span><br>
+                        <small style="color:var(--text-muted)">${r.last_publish_status ? 'letztes Cloudflare-Event' : 'kein Cloudflare-Event'}</small>
                     </td>
                     <td style="padding: 1rem;">
                         <span class="status-pill ${domainClass}">${escapeHtml(domainStatus)}</span><br>
@@ -104,7 +100,6 @@
                     <td style="padding: 1rem;">
                         <div class="admin-actions">
                             <a href="/preview/${r.id}" target="_blank">Preview</a>
-                            ${publishedLink}
                             <button type="button" onclick="prepareCf(${r.id}, this)">CF vorbereiten</button>
                         </div>
                     </td>

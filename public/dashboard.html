@@ -190,13 +190,8 @@
                     <a class="button" href="/preview" target="_blank">Vorschau öffnen</a>
                 </div>
                 <div class="card">
-                    <h3>Lokale Veröffentlichung</h3>
-                    <p class="muted">Statische Seite unter der lokalen Published-Route.</p>
-                    <button type="button" id="publishBtn">Lokal veröffentlichen</button>
-                </div>
-                <div class="card">
                     <h3>Cloudflare Export</h3>
-                    <p class="muted">Export-Ordner für manuellen Pages-Upload.</p>
+                    <p class="muted">Bereitet die technische Auslieferung der Restaurantseite vor. Ein echter Online-Deploy wird später automatisiert.</p>
                     <button type="button" id="cfPrepareBtn" class="secondary">Cloudflare vorbereiten</button>
                 </div>
             </div>
@@ -348,13 +343,11 @@
         async function loadStatus() {
             const status = await api('/api/restaurant/status');
             currentStatus = status;
-            const publishedClass = status.isPublished ? 'status-ok' : 'status-muted';
             const domainClass = status.freeDomainStatus === 'active' ? 'status-ok' : (status.freeDomainStatus === 'pending' ? 'status-warn' : 'status-muted');
-            const publishedLink = status.localPublishedUrl ? `<a href="${escapeAttr(status.localPublishedUrl)}" target="_blank">öffnen</a>` : '<span class="muted">noch nicht verfügbar</span>';
 
             document.getElementById('statusPanel').innerHTML = `
                 <div class="status-box"><div class="status-label">Restaurant</div><div class="status-value">${escapeHtml(status.restaurantName)}</div><small>${escapeHtml(status.slug)}</small></div>
-                <div class="status-box"><div class="status-label">Veröffentlichung</div><div class="status-value"><span class="status-pill ${publishedClass}">${status.isPublished ? 'published' : 'draft'}</span></div><small>${publishedLink}</small></div>
+                <div class="status-box"><div class="status-label">Seitenstatus</div><div class="status-value"><span class="status-pill status-muted">Entwurf</span></div><small>Online-Veröffentlichung folgt über den Deploy-Flow.</small></div>
                 <div class="status-box"><div class="status-label">Kostenlose Adresse</div><div class="status-value">${escapeHtml(status.freeHostname)}</div><small><span class="status-pill ${domainClass}">${escapeHtml(status.freeDomainStatus)}</span></small></div>
                 <div class="status-box"><div class="status-label">Template / Tarif</div><div class="status-value">${escapeHtml(status.template || 'free_default')} / ${escapeHtml(status.plan)}</div><small>${status.lastPublishStatus ? `letztes Event: ${escapeHtml(status.lastPublishStatus)}` : 'kein Publish-Event'}</small></div>
                 <div class="status-box"><div class="status-label">Nächster Schritt</div><div class="status-value">${escapeHtml(status.nextStep)}</div></div>
@@ -384,7 +377,6 @@
         function renderOnboardingAction(step) {
             if (step.targetTab) return `<button class="btn-sm secondary" type="button" onclick="showTab('${escapeAttr(step.targetTab)}')">Öffnen</button>`;
             if (step.url) return `<a class="btn-sm secondary" href="${escapeAttr(step.url)}" target="_blank">Öffnen</a>`;
-            if (step.action === 'publish') return '<button class="btn-sm secondary" type="button" onclick="document.getElementById(\'publishBtn\').click()">Starten</button>';
             if (step.action === 'cf-prepare') return '<button class="btn-sm secondary" type="button" onclick="document.getElementById(\'cfPrepareBtn\').click()">Starten</button>';
             return '';
         }
@@ -795,21 +787,6 @@
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = 'index.html');
-        });
-
-        document.getElementById('publishBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('publishBtn');
-            const oldText = btn.textContent;
-            btn.textContent = 'Veröffentliche...';
-            try {
-                const data = await api('/api/restaurant/publish', { method: 'POST' });
-                await Promise.all([loadStatus(), loadOnboarding()]);
-                showAlert(`Erfolgreich veröffentlicht: ${data.exportPath}`, 'success');
-            } catch (error) {
-                showAlert(error.message);
-            } finally {
-                btn.textContent = oldText;
-            }
         });
 
         document.getElementById('cfPrepareBtn').addEventListener('click', async () => {

@@ -360,23 +360,21 @@ const DEFAULT_HELP_ARTICLES = [
             '3. Legen Sie in der Speisekarte Kategorien und Gerichte an.',
             '4. Passen Sie unter Design & Hero die Überschrift, Farbe und Bilder an.',
             '5. Öffnen Sie die Vorschau und prüfen Sie die Seite.',
-            '6. Klicken Sie auf Lokal Veröffentlichen.',
+            '6. Bereiten Sie die Online-Veröffentlichung vor, sobald der Deploy-Flow freigeschaltet ist.',
             '',
-            'Die lokale Veröffentlichung ist noch kein echtes externes Cloudflare-Deployment. Sie ist der technische Zwischenstand, den Sie prüfen können.'
+            'Die echte Online-Veröffentlichung wird später über den Restiq-Deploy-Flow gesteuert.'
         ].join('\n')
     },
     {
         article_type: 'help',
-        title: 'Was bedeutet Vorschau, Published und Cloudflare?',
-        slug: 'preview-published-cloudflare',
+        title: 'Was bedeutet Vorschau und Cloudflare?',
+        slug: 'preview-cloudflare',
         sort_order: 1,
         content_markdown: [
-            '# Vorschau, Published und Cloudflare',
+            '# Vorschau und Cloudflare',
             'Die Vorschau zeigt die aktuelle interne Darstellung im Dashboard. Sie ist nur für angemeldete Nutzer gedacht.',
             '',
-            'Published ist die lokal erzeugte statische Seite. Sie ist ohne Login unter /published/<slug> erreichbar.',
-            '',
-            'Cloudflare vorbereiten erzeugt einen Export-Ordner für den späteren manuellen Upload. Dieser Schritt verbindet noch keine echte Domain automatisch.'
+            'Cloudflare vorbereiten ist ein technischer Zwischenschritt für die spätere Online-Veröffentlichung. Dieser Schritt verbindet noch keine echte Domain automatisch.'
         ].join('\n')
     },
     {
@@ -421,7 +419,7 @@ function ensureDefaultHelpArticles() {
     `);
 
     const transaction = db.transaction(() => {
-        db.prepare("DELETE FROM help_articles WHERE slug IN ('erste-schritte', 'menue-bearbeiten')").run();
+        db.prepare("DELETE FROM help_articles WHERE slug IN ('erste-schritte', 'menue-bearbeiten', 'preview-published-cloudflare')").run();
         for (const article of DEFAULT_HELP_ARTICLES) {
             upsert.run(article);
         }
@@ -643,8 +641,8 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         ORDER BY sort_order ASC, id ASC
         LIMIT 1
     `).get();
-    let nextStep = 'Seite lokal veroeffentlichen';
-    if (restaurant.is_published === 1 && restaurant.free_domain_status !== 'pending' && restaurant.free_domain_status !== 'active') {
+    let nextStep = 'Vorschau pruefen';
+    if (restaurant.free_domain_status !== 'pending' && restaurant.free_domain_status !== 'active') {
         nextStep = 'Cloudflare-Export vorbereiten';
     } else if (restaurant.free_domain_status === 'pending') {
         nextStep = 'Manuellen Cloudflare-Upload pruefen';
@@ -658,8 +656,7 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         slug: restaurant.public_slug_internal,
         plan: restaurant.current_plan,
         template: restaurant.template_key,
-        isPublished: restaurant.is_published === 1,
-        localPublishedUrl: restaurant.is_published === 1 ? `/published/${restaurant.public_slug_internal}` : null,
+        pageStatus: restaurant.free_domain_status === 'active' ? 'live' : 'draft',
         expectedFreeHostname,
         freeHostname: restaurant.free_hostname || expectedFreeHostname,
         freeDomainStatus: restaurant.free_domain_status || 'not_prepared',
@@ -716,7 +713,6 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
     const hasMenu = menuStats.categories > 0 && menuStats.dishes > 0;
     const hasHours = openingHoursCount >= 7;
     const hasClosures = closuresCount > 0;
-    const isPublished = restaurant.is_published === 1;
     const cfPrepared = restaurant.free_domain_status === 'pending' || restaurant.free_domain_status === 'active';
 
     const steps = [
@@ -725,8 +721,7 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
         { key: 'closures', label: 'Urlaub und Schließzeiten prüfen', done: hasClosures, targetTab: 'closures' },
         { key: 'menu', label: 'Speisekarte mit Kategorien und Gerichten pflegen', done: hasMenu, targetTab: 'menu' },
         { key: 'design', label: 'Design, Hero und Beschreibung prüfen', done: hasDesign, targetTab: 'design' },
-        { key: 'preview', label: 'Vorschau öffnen und Seite kontrollieren', done: isPublished, url: '/preview' },
-        { key: 'publish', label: 'Lokal veröffentlichen', done: isPublished, action: 'publish' },
+        { key: 'preview', label: 'Vorschau öffnen und Seite kontrollieren', done: false, url: '/preview' },
         { key: 'cloudflare', label: 'Cloudflare-Export vorbereiten', done: cfPrepared, action: 'cf-prepare' }
     ];
 
@@ -1334,83 +1329,23 @@ app.get('/preview/:id', isAuthenticated, hasRole('platform_admin'), (req, res) =
     res.sendFile(path.join(__dirname, 'public', 'preview.html'));
 });
 
-app.get('/published/:slug', (req, res) => {
-    const restaurant = db.prepare(`
-        SELECT r.public_slug_internal, s.is_published
-        FROM restaurants r
-        JOIN site_configs s ON r.id = s.restaurant_id
-        WHERE r.public_slug_internal = ? AND r.is_active = 1
-    `).get(req.params.slug);
-
-    if (!restaurant || restaurant.is_published !== 1) {
-        return res.status(404).send('Diese Restiq-Seite wurde noch nicht veroeffentlicht.');
-    }
-
-    res.sendFile(path.join(__dirname, 'publish', restaurant.public_slug_internal, 'index.html'));
-});
-
-app.use('/published/:slug', (req, res, next) => {
-    const restaurant = db.prepare(`
-        SELECT r.public_slug_internal, s.is_published
-        FROM restaurants r
-        JOIN site_configs s ON r.id = s.restaurant_id
-        WHERE r.public_slug_internal = ? AND r.is_active = 1
-    `).get(req.params.slug);
-
-    if (!restaurant || restaurant.is_published !== 1) {
-        return res.status(404).send('Diese Restiq-Seite wurde noch nicht veroeffentlicht.');
-    }
-
-    express.static(path.join(__dirname, 'publish', restaurant.public_slug_internal))(req, res, next);
-});
-
-// --- Publish API ---
-
-app.post('/api/restaurant/publish', isAuthenticated, (req, res) => {
-    const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
-    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
-
-    try {
-        const viewModel = getPreviewData(restaurant.id, { previewMode: false });
-        const { exportStaticSite } = require('./lib/publisher');
-        const exportPath = exportStaticSite(restaurant.public_slug_internal, viewModel);
-
-        const transaction = db.transaction(() => {
-            db.prepare('UPDATE site_configs SET is_published = 1, updated_at = CURRENT_TIMESTAMP WHERE restaurant_id = ?').run(restaurant.id);
-            db.prepare('INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, finished_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)')
-              .run(restaurant.id, 'manual_update', 'local_filesystem', 'success');
-        });
-        transaction();
-
-        res.json({ success: true, exportPath });
-    } catch (e) {
-        console.error('Publish error:', e);
-        try {
-            db.prepare('INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, message, finished_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)')
-              .run(restaurant.id, 'manual_update', 'local_filesystem', 'error', e.message);
-        } catch(logErr) { console.error('Failed to log error to publish_events', logErr); }
-        res.status(500).json({ error: 'Publish failed.', details: e.message });
-    }
-});
-
 // --- Cloudflare Pages Preparation API ---
 // Bereitet den Cloudflare Pages Export vor (Free Plan only).
-// Setzt voraus, dass zuvor ein lokaler Publish-Export existiert.
 // Erstellt cloudflare-export/<slug>/ mit _redirects, _headers, deploy-info.json.
 
 app.post('/api/restaurant/cf-prepare', isAuthenticated, (req, res) => {
     const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
-    const config = db.prepare('SELECT current_plan, is_published FROM site_configs WHERE restaurant_id = ?').get(restaurant.id);
+    const config = db.prepare('SELECT current_plan FROM site_configs WHERE restaurant_id = ?').get(restaurant.id);
     if (config.current_plan !== 'free') {
         return res.status(400).json({ error: 'Cloudflare Pages preparation is only available for the free plan.' });
     }
-    if (!config.is_published) {
-        return res.status(400).json({ error: 'Bitte zuerst lokal veröffentlichen (Publish), bevor der Cloudflare-Export vorbereitet wird.' });
-    }
 
     try {
+        const viewModel = getPreviewData(restaurant.id, { previewMode: false });
+        const { exportStaticSite } = require('./lib/publisher');
+        exportStaticSite(restaurant.public_slug_internal, viewModel);
         const { prepareCfExport } = require('./lib/cf-deploy');
         const { cfExportPath, targetHostname } = prepareCfExport(restaurant.public_slug_internal, restaurant.id);
 
@@ -1564,6 +1499,9 @@ app.post('/api/admin/cf-prepare/:restaurantId', isAuthenticated, hasRole('platfo
     }
 
     try {
+        const viewModel = getPreviewData(restaurant.id, { previewMode: false });
+        const { exportStaticSite } = require('./lib/publisher');
+        exportStaticSite(restaurant.public_slug_internal, viewModel);
         const { prepareCfExport } = require('./lib/cf-deploy');
         const { cfExportPath, targetHostname } = prepareCfExport(restaurant.public_slug_internal, restaurant.id);
 
@@ -1657,6 +1595,6 @@ ensureDefaultHelpArticles();
 
 app.listen(port, () => {
     console.log(`Restiq running at http://localhost:${port}`);
-    console.log(`Lokaler Publish-Export: publish/<slug>/`);
+    console.log(`Interner statischer Export: publish/<slug>/`);
     console.log(`Cloudflare Pages Export: cloudflare-export/<slug>/`);
 });

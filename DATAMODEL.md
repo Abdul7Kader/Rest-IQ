@@ -64,7 +64,7 @@ Die Speisekarte ist hierarchisch aufgebaut:
 
 - **Reguläre Öffnungszeiten**: `opening_hours` speichert pro Wochentag bis zu zwei Zeitfenster plus Notiz.
 - **Sonderschließungen**: `special_closures` speichert Urlaubszeiten, Feiertage oder temporäre Schließungen mit Startdatum, Enddatum, Titel, Hinweis und Aktivstatus.
-- **Darstellung**: Aktive aktuelle oder kommende Sonderschließungen werden in Preview und Published-Seite aus dem zentralen ViewModel angezeigt.
+- **Darstellung**: Aktive aktuelle oder kommende Sonderschließungen werden in Preview und späteren Deploy-Exports aus dem zentralen ViewModel angezeigt.
 
 ## 6. Audit & History
 
