@@ -19,6 +19,7 @@ Die Plattform unterscheidet zwischen der **kostenlosen Stufe (free)** und der **
 - **Feature-Flags**: Die Felder `ads_enabled` und `donation_hint_enabled` sind fachliche Flags, die standardmäßig vom Plan abgeleitet werden:
   - `free`: `ads_enabled = 1`, `donation_hint_enabled = 1`
   - `paid`: `ads_enabled = 0`, `donation_hint_enabled = 0` (Werbefreie Darstellung)
+- **Onboarding**: Bei Registrierung kann der Restaurantinhaber den gewünschten Tarif und die Domain-Variante wählen. Die Wahl wird in `site_configs.current_plan` und `site_domains` gespeichert; echte Zahlung und DNS-Verifikation sind spätere Integrationsschritte.
 
 ## 3. Fachliche Regeln & Constraints
 
@@ -48,6 +49,7 @@ Dieses Modul dient der plattformweiten Unterstützung der Restaurant-Besitzer.
 Bereitet die Integration externer Partner vor.
 - **Affiliate-Modell**: Die Plattform führt keine direkten Domain-Käufe durch. Kunden werden über eine `affiliate_base_url` zum Anbieter (Registrar) weitergeleitet. Der Kauf findet außerhalb der Plattform statt.
 - **Anbietertypen**: `registrar` (für Kauf), `free_hosting` (für Cloudflare-Integration), `both`.
+- **Domainstatus**: Eine kostenlose Restiq-Adresse wird als `free_generated` gespeichert. Eigene Domains werden als `custom` mit `pending` gespeichert, bis eine spätere DNS-/Cloudflare-Prüfung die Inhaberschaft bestätigt.
 
 
 ## 5. Menü-Struktur

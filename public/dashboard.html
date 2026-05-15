@@ -714,10 +714,39 @@
                 </div>
                 <div class="card">
                     <h3>Eigene Domain</h3>
-                    <p class="muted">Custom-Domain-Verwaltung wird in der bezahlten Stufe aktiviert.</p>
-                    <input type="text" disabled placeholder="www.restaurant.de">
+                    <p class="muted">Status: <span class="status-pill ${currentStatus.customDomain ? 'status-warn' : 'status-muted'}">${escapeHtml(currentStatus.customDomainStatus)}</span></p>
+                    <form id="domainForm">
+                        <div class="form-group">
+                            <label>Domain-Auswahl</label>
+                            <select name="domain_choice">
+                                <option value="restiq_free">Kostenlose RestIQ-Adresse nutzen</option>
+                                <option value="buy_external">Domain extern kaufen / später eintragen</option>
+                                <option value="own_domain" ${currentStatus.customDomain ? 'selected' : ''}>Eigene Domain eintragen</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Eigene Domain</label>
+                            <input type="text" name="custom_domain" placeholder="www.restaurant.de" value="${escapeAttr(currentStatus.customDomain || '')}">
+                        </div>
+                        <button type="submit" class="secondary">Domainwunsch speichern</button>
+                    </form>
+                    ${currentStatus.domainProvider ? `<p class="muted" style="margin-top: 1rem;">Domain extern kaufen: <a href="${escapeAttr(currentStatus.domainProvider.affiliate_base_url || currentStatus.domainProvider.website_url)}" target="_blank" rel="noopener">${escapeHtml(currentStatus.domainProvider.provider_name)}</a></p>` : ''}
+                    <p class="muted" style="margin-top: 1rem;">Eigentumsprüfung folgt später über DNS/Cloudflare. Ein Passwort für Domains reicht technisch nicht aus.</p>
                 </div>
             `;
+            document.getElementById('domainForm').addEventListener('submit', saveDomainChoice);
+        }
+
+        async function saveDomainChoice(event) {
+            event.preventDefault();
+            const data = Object.fromEntries(new FormData(event.target).entries());
+            try {
+                await api('/api/restaurant/domain', { method: 'POST', body: JSON.stringify(data) });
+                showSuccess();
+                await loadStatus();
+            } catch (error) {
+                showAlert(error.message);
+            }
         }
 
         async function loadHelp() {

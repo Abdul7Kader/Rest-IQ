@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registrieren - Restiq</title>
     <link rel="stylesheet" href="css/style.css">
+    <style>
+        .choice-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        .choice-card { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; cursor: pointer; background: white; }
+        .choice-card:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
+        .choice-card input { width: auto; margin-right: 0.5rem; }
+        .choice-title { font-weight: 700; margin-bottom: 0.35rem; }
+        .choice-meta { color: var(--text-muted); font-size: 0.9rem; }
+        .hidden { display: none !important; }
+    </style>
 </head>
 <body>
     <div class="container" style="max-width: 760px; margin-top: 3rem;">
@@ -67,6 +76,46 @@
                         <input type="text" id="city" name="city">
                     </div>
                 </div>
+
+                <h2 style="margin-top: 2rem;">Tarif wählen</h2>
+                <div class="choice-grid">
+                    <label class="choice-card">
+                        <input type="radio" name="plan_choice" value="free" checked>
+                        <span class="choice-title">Kostenlos mit Werbung</span>
+                        <div class="choice-meta">Restiq-Branding, Werbeplätze und Spendenhinweis bleiben sichtbar.</div>
+                    </label>
+                    <label class="choice-card">
+                        <input type="radio" name="plan_choice" value="paid">
+                        <span class="choice-title">Werbefrei vorbereiten</span>
+                        <div class="choice-meta">Keine Werbung und kein Spendenhinweis. Zahlung wird später angebunden.</div>
+                    </label>
+                </div>
+
+                <h2 style="margin-top: 2rem;">Domain wählen</h2>
+                <div class="choice-grid">
+                    <label class="choice-card">
+                        <input type="radio" name="domain_choice" value="restiq_free" checked>
+                        <span class="choice-title">Kostenlose RestIQ-Adresse</span>
+                        <div class="choice-meta">RestIQ erzeugt eine pages.dev-Adresse aus Ihrem Restaurantnamen.</div>
+                    </label>
+                    <label class="choice-card">
+                        <input type="radio" name="domain_choice" value="buy_external">
+                        <span class="choice-title">Domain extern kaufen</span>
+                        <div class="choice-meta">Sie können über einen Partner-Link eine Domain kaufen und später eintragen.</div>
+                    </label>
+                    <label class="choice-card">
+                        <input type="radio" name="domain_choice" value="own_domain">
+                        <span class="choice-title">Eigene Domain eintragen</span>
+                        <div class="choice-meta">Zum Beispiel www.mein-restaurant.de. DNS-Prüfung folgt später.</div>
+                    </label>
+                </div>
+                <div id="domainBuyHint" class="alert alert-success hidden" style="margin-top: 1rem;">
+                    Domainkauf erfolgt extern. Beispiel-Partner: <a href="https://namecheap.com?aff=restiq" target="_blank" rel="noopener">Namecheap öffnen</a>
+                </div>
+                <div id="customDomainGroup" class="form-group hidden" style="margin-top: 1rem;">
+                    <label for="custom_domain">Eigene Domain</label>
+                    <input type="text" id="custom_domain" name="custom_domain" placeholder="www.mein-restaurant.de">
+                </div>
                 <button type="submit" style="width: 100%;">Registrieren</button>
             </form>
 
@@ -77,6 +126,14 @@
     </div>
 
     <script>
+        document.querySelectorAll('[name="domain_choice"]').forEach(input => {
+            input.addEventListener('change', () => {
+                const value = document.querySelector('[name="domain_choice"]:checked').value;
+                document.getElementById('customDomainGroup').classList.toggle('hidden', value !== 'own_domain');
+                document.getElementById('domainBuyHint').classList.toggle('hidden', value !== 'buy_external');
+            });
+        });
+
         document.getElementById('registerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const alert = document.getElementById('alert');

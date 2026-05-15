@@ -195,6 +195,35 @@ function normalizeBooleanFlag(value) {
     return value === false || value === 0 || value === '0' || value === 'false' ? 0 : 1;
 }
 
+function normalizePlan(value) {
+    const plan = trimText(value, 20) || 'free';
+    if (!['free', 'paid'].includes(plan)) {
+        throw new Error('INVALID_PLAN');
+    }
+    return plan;
+}
+
+function normalizeDomainChoice(value) {
+    const choice = trimText(value, 40) || 'restiq_free';
+    if (!['restiq_free', 'buy_external', 'own_domain'].includes(choice)) {
+        throw new Error('INVALID_DOMAIN_CHOICE');
+    }
+    return choice;
+}
+
+function normalizeHostname(value) {
+    let hostname = trimText(value, 253)
+        .toLowerCase()
+        .replace(/^https?:\/\//, '')
+        .replace(/\/.*$/, '');
+
+    if (!hostname) return null;
+    if (!/^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(hostname)) {
+        throw new Error('INVALID_HOSTNAME');
+    }
+    return hostname;
+}
+
 function getOwnerRestaurant(userId) {
     return db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(userId);
 }
@@ -213,7 +242,10 @@ function sendValidationError(res, error) {
         INVALID_DISPLAY_MODE: 'Invalid display mode.',
         REQUIRED_TITLE: 'Title is required.',
         REQUIRED_NAME: 'Name is required.',
-        REQUIRED_PRICE: 'Price is required.'
+        REQUIRED_PRICE: 'Price is required.',
+        INVALID_PLAN: 'Invalid plan selection.',
+        INVALID_DOMAIN_CHOICE: 'Invalid domain option.',
+        INVALID_HOSTNAME: 'Invalid domain name.'
     };
     return res.status(400).json({ error: messages[error.message] || 'Invalid input.' });
 }
@@ -256,6 +288,12 @@ function createRestaurantForOwner(ownerUserId, payload) {
 
     const contactEmail = String(payload.contact_email || payload.email || '').trim();
     const slug = createUniqueRestaurantSlug(restaurantName);
+    const plan = normalizePlan(payload.plan_choice || payload.current_plan);
+    const domainChoice = normalizeDomainChoice(payload.domain_choice);
+    const customHostname = normalizeHostname(payload.custom_domain);
+    if (domainChoice === 'own_domain' && !customHostname) {
+        throw new Error('CUSTOM_DOMAIN_REQUIRED');
+    }
 
     const info = db.prepare(`
         INSERT INTO restaurants (
@@ -282,15 +320,29 @@ function createRestaurantForOwner(ownerUserId, payload) {
             restaurant_id, current_plan, template_key, ads_enabled, donation_hint_enabled,
             hero_title, hero_subtitle
         )
-        VALUES (?, 'free', 'free_default', 1, 1, ?, ?)
+        VALUES (?, ?, 'free_default', ?, ?, ?, ?)
     `).run(
         restaurantId,
+        plan,
+        plan === 'free' ? 1 : 0,
+        plan === 'free' ? 1 : 0,
         restaurantName,
         String(payload.short_description || '').trim()
     );
     db.prepare('INSERT INTO menus (restaurant_id, title) VALUES (?, ?)').run(restaurantId, 'Speisekarte');
+    db.prepare(`
+        INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status)
+        VALUES (?, ?, 'free_generated', ?, 'pending')
+    `).run(restaurantId, `${slug}-restiq.pages.dev`, customHostname ? 0 : 1);
 
-    return { id: restaurantId, slug };
+    if (customHostname) {
+        db.prepare(`
+            INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status)
+            VALUES (?, ?, 'custom', 1, 'pending')
+        `).run(restaurantId, customHostname);
+    }
+
+    return { id: restaurantId, slug, plan, domainChoice, customHostname };
 }
 
 const DEFAULT_HELP_ARTICLES = [
@@ -433,6 +485,12 @@ app.post('/api/auth/register', authRateLimit, async (req, res) => {
         if (error.message === 'RESTAURANT_NAME_REQUIRED') {
             return res.status(400).json({ error: 'Restaurant name is required.' });
         }
+        if (error.message === 'CUSTOM_DOMAIN_REQUIRED') {
+            return res.status(400).json({ error: 'Custom domain is required for this domain option.' });
+        }
+        if (['INVALID_PLAN', 'INVALID_DOMAIN_CHOICE', 'INVALID_HOSTNAME'].includes(error.message)) {
+            return sendValidationError(res, error);
+        }
         res.status(500).json({ error: 'Registration failed.' });
     }
 });
@@ -533,6 +591,12 @@ app.post('/api/restaurant/setup', isAuthenticated, hasRole('restaurant_owner'), 
         if (error.message === 'RESTAURANT_NAME_REQUIRED') {
             return res.status(400).json({ error: 'Restaurant name is required.' });
         }
+        if (error.message === 'CUSTOM_DOMAIN_REQUIRED') {
+            return res.status(400).json({ error: 'Custom domain is required for this domain option.' });
+        }
+        if (['INVALID_PLAN', 'INVALID_DOMAIN_CHOICE', 'INVALID_HOSTNAME'].includes(error.message)) {
+            return sendValidationError(res, error);
+        }
         res.status(500).json({ error: 'Restaurant setup failed.' });
     }
 });
@@ -565,6 +629,20 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
     }
 
     const expectedFreeHostname = `${restaurant.public_slug_internal}-restiq.pages.dev`;
+    const customDomain = db.prepare(`
+        SELECT hostname, status, is_primary
+        FROM site_domains
+        WHERE restaurant_id = ? AND domain_type = 'custom'
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+    `).get(restaurant.id);
+    const registrar = db.prepare(`
+        SELECT provider_name, website_url, affiliate_base_url
+        FROM domain_providers
+        WHERE is_active = 1 AND supports_paid_domains = 1
+        ORDER BY sort_order ASC, id ASC
+        LIMIT 1
+    `).get();
     let nextStep = 'Seite lokal veroeffentlichen';
     if (restaurant.is_published === 1 && restaurant.free_domain_status !== 'pending' && restaurant.free_domain_status !== 'active') {
         nextStep = 'Cloudflare-Export vorbereiten';
@@ -585,6 +663,9 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         expectedFreeHostname,
         freeHostname: restaurant.free_hostname || expectedFreeHostname,
         freeDomainStatus: restaurant.free_domain_status || 'not_prepared',
+        customDomain: customDomain ? customDomain.hostname : null,
+        customDomainStatus: customDomain ? customDomain.status : 'not_configured',
+        domainProvider: registrar || null,
         lastPublishStatus: restaurant.last_publish_status,
         lastPublishAt: restaurant.last_publish_at,
         lastPublishMessage: restaurant.last_publish_message,
@@ -1289,11 +1370,6 @@ app.post('/api/restaurant/publish', isAuthenticated, (req, res) => {
     const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
-    const config = db.prepare('SELECT current_plan FROM site_configs WHERE restaurant_id = ?').get(restaurant.id);
-    if (config.current_plan !== 'free') {
-        return res.status(400).json({ error: 'Local publish is only supported for the free plan.' });
-    }
-
     try {
         const viewModel = getPreviewData(restaurant.id, { previewMode: false });
         const { exportStaticSite } = require('./lib/publisher');
@@ -1416,6 +1492,64 @@ app.post('/api/restaurant/cf-prepare', isAuthenticated, (req, res) => {
             );
         } catch (logErr) { console.error('Failed to log CF prepare error', logErr); }
         res.status(500).json({ error: 'CF-Prepare fehlgeschlagen.', details: e.message });
+    }
+});
+
+app.post('/api/restaurant/domain', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    let domainChoice;
+    let hostname;
+    try {
+        domainChoice = normalizeDomainChoice(req.body && req.body.domain_choice);
+        hostname = normalizeHostname(req.body && req.body.custom_domain);
+        if (domainChoice === 'own_domain' && !hostname) {
+            throw new Error('INVALID_HOSTNAME');
+        }
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    const expectedFreeHostname = `${restaurant.public_slug_internal}-restiq.pages.dev`;
+    const transaction = db.transaction(() => {
+        db.prepare(`
+            INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status)
+            VALUES (?, ?, 'free_generated', ?, 'pending')
+            ON CONFLICT(hostname) DO UPDATE SET
+                is_primary = excluded.is_primary,
+                updated_at = CURRENT_TIMESTAMP
+        `).run(restaurant.id, expectedFreeHostname, domainChoice === 'restiq_free' ? 1 : 0);
+
+        if (hostname) {
+            db.prepare(`
+                UPDATE site_domains
+                SET is_primary = 0, updated_at = CURRENT_TIMESTAMP
+                WHERE restaurant_id = ? AND domain_type = 'custom'
+            `).run(restaurant.id);
+            db.prepare(`
+                INSERT INTO site_domains (restaurant_id, hostname, domain_type, is_primary, status)
+                VALUES (?, ?, 'custom', 1, 'pending')
+                ON CONFLICT(hostname) DO UPDATE SET
+                    is_primary = 1,
+                    status = 'pending',
+                    updated_at = CURRENT_TIMESTAMP
+            `).run(restaurant.id, hostname);
+        }
+    });
+
+    try {
+        transaction();
+        res.json({
+            success: true,
+            domainChoice,
+            customDomain: hostname,
+            note: hostname
+                ? 'Custom domain saved as pending. DNS ownership verification will be implemented in the Cloudflare automation step.'
+                : 'Free Restiq domain selected.'
+        });
+    } catch (error) {
+        res.status(500).json({ error: 'Domain update failed.' });
     }
 });
 
