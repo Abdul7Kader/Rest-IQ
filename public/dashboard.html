@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Restiq</title>
+    <title>Owner Admin - Restiq</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
-        .sidebar { width: 250px; background: white; border-right: 1px solid var(--border); height: 100vh; position: fixed; left: 0; top: 0; padding: 2rem 1rem; }
+        .sidebar { width: 250px; background: white; border-right: 1px solid var(--border); height: 100vh; position: fixed; left: 0; top: 0; padding: 2rem 1rem; overflow-y: auto; }
         .sidebar-nav { list-style: none; margin-top: 2rem; }
         .sidebar-nav li { margin-bottom: 0.5rem; }
         .sidebar-nav a { display: block; padding: 0.75rem 1rem; color: var(--text); text-decoration: none; border-radius: 4px; transition: background 0.2s; }
@@ -14,61 +14,66 @@
         .main-content { margin-left: 250px; padding: 2rem; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
-        .menu-item { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: white; position: relative; }
-        .menu-cat { border-left: 4px solid var(--primary); background: #f8fafc; padding: 1rem; margin-top: 2rem; border-radius: 0 8px 8px 0; }
-        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
-        .hours-grid { display: grid; grid-template-columns: 120px 1fr; gap: 1rem; align-items: center; }
-        .preview-bar { background: #1e293b; color: white; padding: 1rem; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; margin-bottom: 2rem; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 2rem; }
         .status-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
         .status-box { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
         .status-label { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; }
-        .status-value { font-weight: 700; }
+        .status-value { font-weight: 700; overflow-wrap: anywhere; }
         .status-pill { display: inline-block; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; }
         .status-ok { background: #dcfce7; color: #166534; }
         .status-warn { background: #fef3c7; color: #92400e; }
         .status-muted { background: #e2e8f0; color: #475569; }
-        .onboarding-panel { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem; }
-        .onboarding-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
-        .onboarding-list { display: grid; gap: 0.75rem; }
-        .onboarding-step { display: flex; justify-content: space-between; gap: 1rem; align-items: center; border-top: 1px solid var(--border); padding-top: 0.75rem; }
-        .onboarding-step:first-child { border-top: none; padding-top: 0; }
-        .step-action { background: var(--bg); color: var(--primary); border: 1px solid var(--border); padding: 0.35rem 0.6rem; border-radius: 4px; font-size: 0.8rem; text-decoration: none; cursor: pointer; }
+        .toolbar { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+        .btn-sm { padding: 0.35rem 0.6rem; font-size: 0.8rem; }
+        .btn-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; }
+        .hours-grid { display: grid; grid-template-columns: 110px 1fr; gap: 0.75rem 1rem; align-items: center; }
+        .hours-row { display: grid; grid-template-columns: auto repeat(4, minmax(92px, 1fr)) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; }
+        .menu-cat { border-left: 4px solid var(--primary); background: white; border-radius: 0 8px 8px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 1rem; margin-bottom: 1.25rem; }
+        .menu-item { display: grid; grid-template-columns: 72px 1fr auto; gap: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; align-items: start; }
+        .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; background: #f1f5f9; border: 1px solid var(--border); }
+        .muted { color: var(--text-muted); }
+        .meta-line { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+        .modal-card { width: min(720px, 100%); max-height: 92vh; overflow-y: auto; background: white; border-radius: 8px; padding: 1.5rem; }
+        .hidden { display: none !important; }
+        @media (max-width: 860px) {
+            .sidebar { position: static; width: auto; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+            .main-content { margin-left: 0; padding: 1rem; }
+            .hours-grid { grid-template-columns: 1fr; }
+            .hours-row { grid-template-columns: 1fr 1fr; }
+            .menu-item { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <div class="sidebar">
+    <aside class="sidebar">
         <h2 style="padding: 0 1rem; color: var(--primary);">Restiq</h2>
         <ul class="sidebar-nav">
-            <li><a href="#" onclick="showTab('base')" id="nav-base" class="active">Grunddaten</a></li>
+            <li><a href="#" onclick="showTab('overview')" id="nav-overview" class="active">Übersicht</a></li>
+            <li><a href="#" onclick="showTab('base')" id="nav-base">Restaurantdaten</a></li>
             <li><a href="#" onclick="showTab('hours')" id="nav-hours">Öffnungszeiten</a></li>
+            <li><a href="#" onclick="showTab('closures')" id="nav-closures">Urlaub & Schließzeiten</a></li>
             <li><a href="#" onclick="showTab('menu')" id="nav-menu">Speisekarte</a></li>
-            <li><a href="#" onclick="showTab('design')" id="nav-design">Design & Hero</a></li>
+            <li><a href="#" onclick="showTab('design')" id="nav-design">Design</a></li>
+            <li><a href="#" onclick="showTab('publish')" id="nav-publish">Veröffentlichung</a></li>
+            <li><a href="#" onclick="showTab('plan')" id="nav-plan">Tarif & Domain</a></li>
             <li><a href="#" onclick="showTab('help')" id="nav-help">Hilfe</a></li>
-            <li style="margin-top: 2rem;"><a href="/preview" target="_blank" style="background: var(--primary); color: white;">Live Vorschau</a></li>
-            <li style="margin-top: 0.5rem;"><a href="#" id="publishBtn" style="background: var(--success); color: white;">Lokal Veröffentlichen</a></li>
-            <li style="margin-top: 0.5rem;"><a href="#" id="cfPrepareBtn" style="background: #f97316; color: white; font-size: 0.85rem;">☁ Cloudflare vorbereiten</a></li>
+            <li style="margin-top: 1rem;"><a href="/preview" target="_blank" style="background: var(--primary); color: white;">Vorschau öffnen</a></li>
             <li style="margin-top: 1rem;"><a href="#" id="logoutBtn" style="color: var(--error);">Abmelden</a></li>
         </ul>
-    </div>
+    </aside>
 
-    <div class="main-content">
+    <main class="main-content">
         <div id="alert" class="alert alert-error hidden"></div>
-        <div id="success" class="alert alert-success hidden">Änderungen gespeichert!</div>
-        <div id="statusPanel" class="status-panel hidden"></div>
-        <div id="onboardingPanel" class="onboarding-panel hidden"></div>
+        <div id="success" class="alert alert-success hidden">Gespeichert.</div>
 
         <div id="setupState" class="hidden">
-            <div class="section-header">
-                <h1>Restaurantprofil anlegen</h1>
-            </div>
+            <div class="section-header"><h1>Restaurantprofil anlegen</h1></div>
             <div class="card">
-                <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
-                    Dieser Zugang hat noch kein Restaurantprofil. Legen Sie es an, danach wird der Arbeitsbereich freigeschaltet.
-                </p>
                 <form id="setupForm">
-                    <div class="form-group"><label>Restaurant Name</label><input type="text" name="restaurant_name" required></div>
-                    <div class="form-group"><label>Kurzbeschreibung</label><textarea name="short_description" rows="3"></textarea></div>
+                    <div class="form-group"><label>Restaurant Name</label><input type="text" name="restaurant_name" required maxlength="160"></div>
+                    <div class="form-group"><label>Kurzbeschreibung</label><textarea name="short_description" rows="3" maxlength="500"></textarea></div>
                     <div class="grid">
                         <div class="form-group"><label>E-Mail</label><input type="email" name="contact_email"></div>
                         <div class="form-group"><label>Telefon</label><input type="text" name="contact_phone"></div>
@@ -86,18 +91,21 @@
             </div>
         </div>
 
-        <!-- Grunddaten -->
-        <div id="tab-base" class="tab-content active">
-            <div class="section-header">
-                <h1>Grunddaten</h1>
-            </div>
+        <section id="tab-overview" class="tab-content active">
+            <div class="section-header"><h1>Übersicht</h1></div>
+            <div id="statusPanel" class="status-panel"></div>
+            <div id="onboardingPanel" class="card"></div>
+        </section>
+
+        <section id="tab-base" class="tab-content">
+            <div class="section-header"><h1>Restaurantdaten</h1></div>
             <div class="card">
-                <form onsubmit="handleSave(event, 'base')">
+                <form id="baseForm">
                     <div class="grid">
-                        <div class="form-group"><label>Restaurant Name</label><input type="text" name="restaurant_name" required></div>
+                        <div class="form-group"><label>Restaurant Name</label><input type="text" name="restaurant_name" required maxlength="160"></div>
                         <div class="form-group"><label>E-Mail</label><input type="email" name="contact_email"></div>
                     </div>
-                    <div class="form-group"><label>Kurzbeschreibung</label><textarea name="short_description"></textarea></div>
+                    <div class="form-group"><label>Kurzbeschreibung</label><textarea name="short_description" rows="3" maxlength="500"></textarea></div>
                     <div class="grid">
                         <div class="form-group"><label>Telefon</label><input type="text" name="contact_phone"></div>
                         <div class="form-group"><label>WhatsApp</label><input type="text" name="whatsapp"></div>
@@ -110,82 +118,110 @@
                         <div class="form-group"><label>PLZ</label><input type="text" name="postal_code"></div>
                         <div class="form-group"><label>Stadt</label><input type="text" name="city"></div>
                     </div>
-                    <button type="submit">Speichern</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- Öffnungszeiten -->
-        <div id="tab-hours" class="tab-content">
-            <div class="section-header">
-                <h1>Öffnungszeiten</h1>
-            </div>
-            <div class="card">
-                <form onsubmit="handleSaveHours(event)">
-                    <div id="hoursList" class="hours-grid">
-                        <!-- Sunday to Monday injected here -->
+                    <div class="grid">
+                        <div class="form-group"><label>Instagram URL</label><input type="url" name="instagram_url"></div>
+                        <div class="form-group"><label>Facebook URL</label><input type="url" name="facebook_url"></div>
                     </div>
-                    <button type="submit" style="margin-top: 2rem;">Alle Zeiten speichern</button>
+                    <div class="form-group"><label>TikTok URL</label><input type="url" name="tiktok_url"></div>
+                    <button type="submit">Restaurantdaten speichern</button>
                 </form>
             </div>
-        </div>
+        </section>
 
-        <!-- Speisekarte -->
-        <div id="tab-menu" class="tab-content">
+        <section id="tab-hours" class="tab-content">
+            <div class="section-header"><h1>Öffnungszeiten</h1></div>
+            <div class="card">
+                <form id="hoursForm">
+                    <div id="hoursList" class="hours-grid"></div>
+                    <button type="submit" style="margin-top: 2rem;">Öffnungszeiten speichern</button>
+                </form>
+            </div>
+        </section>
+
+        <section id="tab-closures" class="tab-content">
+            <div class="section-header">
+                <h1>Urlaub & Schließzeiten</h1>
+                <button type="button" onclick="openClosureModal()">Neue Schließzeit</button>
+            </div>
+            <div id="closuresList"></div>
+        </section>
+
+        <section id="tab-menu" class="tab-content">
             <div class="section-header">
                 <h1>Speisekarte</h1>
-                <button onclick="addCategory()">Neue Kategorie</button>
+                <button type="button" onclick="openCategoryModal()">Neue Kategorie</button>
             </div>
-            <div id="menuStructure">
-                <!-- Categories and Dishes injected here -->
-            </div>
-        </div>
+            <div id="menuStructure"></div>
+        </section>
 
-        <!-- Design -->
-        <div id="tab-design" class="tab-content">
-            <div class="section-header">
-                <h1>Design & Inhalte</h1>
-            </div>
+        <section id="tab-design" class="tab-content">
+            <div class="section-header"><h1>Design</h1></div>
             <div class="card">
-                <form onsubmit="handleSave(event, 'design')">
-                    <div class="form-group"><label>Hero Titel</label><input type="text" name="hero_title"></div>
-                    <div class="form-group"><label>Hero Untertitel</label><input type="text" name="hero_subtitle"></div>
-                    <div class="form-group"><label>Über uns Text</label><textarea name="about_text" rows="5"></textarea></div>
+                <form id="designForm">
                     <div class="grid">
                         <div class="form-group">
                             <label>Template</label>
                             <select name="template_key">
-                                <option value="free_default">Modern (Modern, Luftig)</option>
-                                <option value="free_classic">Classic (Traditionell, Zentriert)</option>
+                                <option value="free_default">Modern</option>
+                                <option value="free_classic">Classic</option>
                             </select>
                         </div>
                         <div class="form-group"><label>Akzentfarbe</label><input type="color" name="accent_color" style="height: 50px;"></div>
                     </div>
-                    <div class="form-group"><label>Logo URL</label><input type="text" name="logo_image_url"></div>
-                    <div class="form-group"><label>Hero Bild URL</label><input type="text" name="hero_image_url"></div>
-                    <div class="form-group"><label>Footer Notiz</label><input type="text" name="footer_note"></div>
+                    <div class="form-group"><label>Hero Titel</label><input type="text" name="hero_title" maxlength="180"></div>
+                    <div class="form-group"><label>Hero Untertitel</label><input type="text" name="hero_subtitle" maxlength="280"></div>
+                    <div class="form-group"><label>Über uns Text</label><textarea name="about_text" rows="5" maxlength="2500"></textarea></div>
+                    <div class="grid">
+                        <div class="form-group"><label>Logo URL</label><input type="url" name="logo_image_url"></div>
+                        <div class="form-group"><label>Hero Bild URL</label><input type="url" name="hero_image_url"></div>
+                    </div>
+                    <div class="form-group"><label>Footer Notiz</label><input type="text" name="footer_note" maxlength="300"></div>
                     <button type="submit">Design speichern</button>
                 </form>
             </div>
-        </div>
+        </section>
 
-        <!-- Hilfe -->
-        <div id="tab-help" class="tab-content">
-             <div class="section-header">
-                <h1>Hilfe & Dokumentation</h1>
+        <section id="tab-publish" class="tab-content">
+            <div class="section-header"><h1>Veröffentlichung</h1></div>
+            <div class="admin-grid">
+                <div class="card">
+                    <h3>Vorschau</h3>
+                    <p class="muted">Interne Ansicht der aktuellen Daten.</p>
+                    <a class="button" href="/preview" target="_blank">Vorschau öffnen</a>
+                </div>
+                <div class="card">
+                    <h3>Lokale Veröffentlichung</h3>
+                    <p class="muted">Statische Seite unter der lokalen Published-Route.</p>
+                    <button type="button" id="publishBtn">Lokal veröffentlichen</button>
+                </div>
+                <div class="card">
+                    <h3>Cloudflare Export</h3>
+                    <p class="muted">Export-Ordner für manuellen Pages-Upload.</p>
+                    <button type="button" id="cfPrepareBtn" class="secondary">Cloudflare vorbereiten</button>
+                </div>
             </div>
-            <div id="helpArticles" class="grid"></div>
-        </div>
-    </div>
+        </section>
 
-    <!-- Modals (Simple overlays) -->
-    <div id="modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;">
-        <div class="card" style="width: 500px;" id="modalContent"></div>
+        <section id="tab-plan" class="tab-content">
+            <div class="section-header"><h1>Tarif & Domain</h1></div>
+            <div id="planPanel" class="admin-grid"></div>
+        </section>
+
+        <section id="tab-help" class="tab-content">
+            <div class="section-header"><h1>Hilfe</h1></div>
+            <div id="helpArticles" class="admin-grid"></div>
+        </section>
+    </main>
+
+    <div id="modal" class="modal-backdrop hidden">
+        <div class="modal-card" id="modalContent"></div>
     </div>
 
     <script>
         let restaurantData = null;
-        let currentMenuId = null;
+        let currentStatus = null;
+        let currentMenu = null;
+        let currentClosures = [];
         const weekdays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
         async function init() {
@@ -211,21 +247,18 @@
             }
 
             restaurantData = await res.json();
-            
             fillForms();
-            loadStatus();
-            loadOnboarding();
-            loadHours();
-            loadMenu();
-            loadHelp();
+            await Promise.all([loadStatus(), loadOnboarding(), loadHours(), loadClosures(), loadMenu(), loadHelp()]);
         }
 
         function showSetupState() {
             document.getElementById('setupState').classList.remove('hidden');
             document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.sidebar-nav a').forEach(a => {
-                if (a.id !== 'logoutBtn') a.style.pointerEvents = 'none';
-                if (a.id !== 'logoutBtn') a.style.opacity = '0.45';
+                if (a.id !== 'logoutBtn') {
+                    a.style.pointerEvents = 'none';
+                    a.style.opacity = '0.45';
+                }
             });
         }
 
@@ -237,261 +270,28 @@
         }
 
         function fillForms() {
-            const forms = document.querySelectorAll('form');
-            forms.forEach(form => {
-                const inputs = form.querySelectorAll('input, textarea, select');
-                inputs.forEach(input => {
+            document.querySelectorAll('form').forEach(form => {
+                form.querySelectorAll('input, textarea, select').forEach(input => {
                     const name = input.name;
-                    if (restaurantData[name] !== undefined) input.value = restaurantData[name];
-                    else if (restaurantData.config && restaurantData.config[name] !== undefined) input.value = restaurantData.config[name];
+                    if (!name) return;
+                    if (restaurantData[name] !== undefined && restaurantData[name] !== null) input.value = restaurantData[name];
+                    else if (restaurantData.config && restaurantData.config[name] !== undefined && restaurantData.config[name] !== null) input.value = restaurantData.config[name];
                 });
             });
         }
 
-        async function loadStatus() {
-            const res = await fetch('/api/restaurant/status');
-            if (!res.ok) return;
-
-            const status = await res.json();
-            const panel = document.getElementById('statusPanel');
-            const publishedClass = status.isPublished ? 'status-ok' : 'status-muted';
-            const domainClass = status.freeDomainStatus === 'active'
-                ? 'status-ok'
-                : (status.freeDomainStatus === 'pending' ? 'status-warn' : 'status-muted');
-            const publishedLink = status.localPublishedUrl
-                ? `<a href="${status.localPublishedUrl}" target="_blank">öffnen</a>`
-                : '<span style="color: var(--text-muted);">noch nicht verfügbar</span>';
-
-            panel.innerHTML = `
-                <div class="status-box">
-                    <div class="status-label">Veröffentlichung</div>
-                    <div class="status-value"><span class="status-pill ${publishedClass}">${status.isPublished ? 'published' : 'draft'}</span></div>
-                    <small>${publishedLink}</small>
-                </div>
-                <div class="status-box">
-                    <div class="status-label">Kostenlose Adresse</div>
-                    <div class="status-value" style="font-size: 0.9rem;">${status.freeHostname}</div>
-                    <small><span class="status-pill ${domainClass}">${status.freeDomainStatus}</span></small>
-                </div>
-                <div class="status-box">
-                    <div class="status-label">Template / Tarif</div>
-                    <div class="status-value">${status.template || 'free_default'} / ${status.plan}</div>
-                    <small>${status.lastPublishStatus ? `letztes Event: ${status.lastPublishStatus}` : 'kein Publish-Event'}</small>
-                </div>
-                <div class="status-box">
-                    <div class="status-label">Nächster Schritt</div>
-                    <div class="status-value">${status.nextStep}</div>
-                </div>
-            `;
-            panel.classList.remove('hidden');
-        }
-
-        async function loadOnboarding() {
-            const res = await fetch('/api/restaurant/onboarding');
-            if (!res.ok) return;
-
-            const guide = await res.json();
-            const panel = document.getElementById('onboardingPanel');
-            const progress = `${guide.completed}/${guide.total}`;
-            const nextLabel = guide.next ? guide.next.label : 'Alle Schritte geprüft';
-
-            panel.innerHTML = `
-                <div class="onboarding-head">
-                    <div>
-                        <h2 style="margin-bottom: 0.35rem;">Geführter Start</h2>
-                        <p style="color: var(--text-muted);">Nächster Schritt: ${nextLabel}</p>
-                    </div>
-                    <span class="status-pill ${guide.completed === guide.total ? 'status-ok' : 'status-warn'}">${progress} erledigt</span>
-                </div>
-                <div class="onboarding-list">
-                    ${guide.steps.map(step => `
-                        <div class="onboarding-step">
-                            <div>
-                                <span class="status-pill ${step.done ? 'status-ok' : 'status-muted'}">${step.done ? 'erledigt' : 'offen'}</span>
-                                <span style="margin-left: 0.5rem;">${step.label}</span>
-                            </div>
-                            ${renderOnboardingAction(step)}
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            panel.classList.remove('hidden');
-        }
-
-        function renderOnboardingAction(step) {
-            if (step.targetTab) {
-                return `<button class="step-action" type="button" onclick="showTab('${step.targetTab}')">Öffnen</button>`;
-            }
-            if (step.url) {
-                return `<a class="step-action" href="${step.url}" target="_blank">Öffnen</a>`;
-            }
-            if (step.action === 'publish') {
-                return '<button class="step-action" type="button" onclick="document.getElementById(\'publishBtn\').click()">Starten</button>';
-            }
-            if (step.action === 'cf-prepare') {
-                return '<button class="step-action" type="button" onclick="document.getElementById(\'cfPrepareBtn\').click()">Starten</button>';
-            }
-            return '';
-        }
-
-        async function handleSave(e, type) {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-            
-            const res = await fetch('/api/restaurant', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+        async function api(path, options = {}) {
+            const res = await fetch(path, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
             });
-            if (res.ok) {
-                showSuccess();
-                loadStatus();
-                loadOnboarding();
-            }
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Request failed.');
+            return data;
         }
-
-        async function loadHours() {
-            const res = await fetch('/api/opening-hours');
-            const hours = await res.json();
-            const grid = document.getElementById('hoursList');
-            grid.innerHTML = '';
-            
-            weekdays.forEach((day, i) => {
-                const h = hours.find(x => x.weekday === i) || { weekday: i, is_closed: 0, open_time_1: '09:00', close_time_1: '22:00' };
-                grid.innerHTML += `
-                    <strong>${day}</strong>
-                    <div style="display: flex; gap: 0.5rem; align-items: center;">
-                        <input type="checkbox" name="closed-${i}" ${h.is_closed ? 'checked' : ''} style="width: 20px;"> Geschlossen
-                        <input type="time" name="open1-${i}" value="${h.open_time_1 || ''}"> - 
-                        <input type="time" name="close1-${i}" value="${h.close_time_1 || ''}">
-                        <input type="text" name="note-${i}" placeholder="Notiz" value="${h.note || ''}">
-                    </div>
-                `;
-            });
-        }
-
-        async function handleSaveHours(e) {
-            e.preventDefault();
-            const hours = weekdays.map((_, i) => ({
-                weekday: i,
-                is_closed: e.target.querySelector(`[name="closed-${i}"]`).checked,
-                open_time_1: e.target.querySelector(`[name="open1-${i}"]`).value,
-                close_time_1: e.target.querySelector(`[name="close1-${i}"]`).value,
-                note: e.target.querySelector(`[name="note-${i}"]`).value
-            }));
-
-            const res = await fetch('/api/opening-hours', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hours })
-            });
-            if (res.ok) {
-                showSuccess();
-                loadOnboarding();
-            }
-        }
-
-        async function loadMenu() {
-            const res = await fetch('/api/menu');
-            const menu = await res.json();
-            currentMenuId = menu.id;
-            const container = document.getElementById('menuStructure');
-            container.innerHTML = '';
-
-            menu.categories.forEach(cat => {
-                const catEl = document.createElement('div');
-                catEl.className = 'menu-cat';
-                catEl.innerHTML = `
-                    <div style="display: flex; justify-content: space-between;">
-                        <h3>${escapeHtml(cat.category_name)} (${escapeHtml(cat.display_mode)})</h3>
-                        <div>
-                            <button class="btn-sm secondary" onclick="editCategory(${JSON.stringify(cat).replace(/"/g, '&quot;')})">Bearbeiten</button>
-                            <button class="btn-sm" onclick="addDish(${cat.id})">+ Gericht</button>
-                        </div>
-                    </div>
-                `;
-                
-                cat.dishes.forEach(dish => {
-                    const dishEl = document.createElement('div');
-                    dishEl.className = 'menu-item';
-                    dishEl.innerHTML = `
-                        <div style="display: flex; justify-content: space-between;">
-                            <strong>${escapeHtml(dish.dish_name)} - ${escapeHtml((dish.price_cents / 100).toFixed(2))}€</strong>
-                            <button class="btn-sm secondary" onclick="editDish(${JSON.stringify(dish).replace(/"/g, '&quot;')})">Edit</button>
-                        </div>
-                        <p style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(dish.description_text)}</p>
-                    `;
-                    catEl.appendChild(dishEl);
-                });
-                container.appendChild(catEl);
-            });
-        }
-
-        // --- Modals for Menu CRUD ---
-
-        function closeModal() { document.getElementById('modal').classList.add('hidden'); }
-        function openModal(html) {
-            document.getElementById('modalContent').innerHTML = html;
-            document.getElementById('modal').classList.remove('hidden');
-        }
-
-        function addCategory() {
-            openModal(`
-                <h2>Neue Kategorie</h2>
-                <form onsubmit="saveCategory(event)">
-                    <div class="form-group"><label>Name</label><input type="text" name="category_name" required></div>
-                    <div class="form-group">
-                        <label>Anzeige</label>
-                        <select name="display_mode"><option value="vertical">Vertikal</option><option value="horizontal">Horizontal</option></select>
-                    </div>
-                    <button type="submit">Speichern</button>
-                    <button type="button" class="secondary" onclick="closeModal()">Abbrechen</button>
-                </form>
-            `);
-        }
-
-        async function saveCategory(e) {
-            e.preventDefault();
-            const data = Object.fromEntries(new FormData(e.target));
-            data.menu_id = currentMenuId;
-            const res = await fetch('/api/menu/categories', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (res.ok) { closeModal(); loadMenu(); loadOnboarding(); }
-        }
-
-        function addDish(catId) {
-            openModal(`
-                <h2>Neues Gericht</h2>
-                <form onsubmit="saveDish(event, ${catId})">
-                    <div class="form-group"><label>Name</label><input type="text" name="dish_name" required></div>
-                    <div class="form-group"><label>Preis (€)</label><input type="number" step="0.01" name="price" required></div>
-                    <div class="form-group"><label>Beschreibung</label><textarea name="description_text"></textarea></div>
-                    <button type="submit">Speichern</button>
-                    <button type="button" class="secondary" onclick="closeModal()">Abbrechen</button>
-                </form>
-            `);
-        }
-
-        async function saveDish(e, catId) {
-            e.preventDefault();
-            const form = new FormData(e.target);
-            const data = Object.fromEntries(form.entries());
-            data.category_id = catId;
-            data.price_cents = Math.round(parseFloat(data.price) * 100);
-
-            const res = await fetch('/api/dishes', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            if (res.ok) { closeModal(); loadMenu(); loadOnboarding(); }
-        }
-
-        // --- Utils ---
 
         function escapeHtml(value) {
             return String(value ?? '')
@@ -502,123 +302,507 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function escapeAttr(value) {
+            return escapeHtml(value).replace(/`/g, '&#96;');
+        }
+
+        function safeHttpUrl(value) {
+            const url = String(value || '').trim();
+            if (!url) return '';
+            try {
+                const parsed = new URL(url);
+                return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function showAlert(message, type = 'error') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type === 'success' ? 'success' : 'error'}`;
+            alert.classList.remove('hidden');
+            setTimeout(() => alert.classList.add('hidden'), type === 'success' ? 5000 : 9000);
+        }
+
         function showSuccess() {
             const s = document.getElementById('success');
             s.classList.remove('hidden');
             setTimeout(() => s.classList.add('hidden'), 3000);
         }
 
-        document.getElementById('setupForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const alert = document.getElementById('alert');
-            alert.classList.add('hidden');
-
-            const data = Object.fromEntries(new FormData(e.target).entries());
-            const res = await fetch('/api/restaurant/setup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
-            const payload = await res.json();
-
-            if (res.ok && payload.success) {
-                window.location.reload();
-            } else {
-                alert.textContent = payload.error || 'Restaurantprofil konnte nicht angelegt werden.';
-                alert.className = 'alert alert-error';
-                alert.classList.remove('hidden');
+        async function saveRestaurantForm(form) {
+            const data = Object.fromEntries(new FormData(form).entries());
+            try {
+                await api('/api/restaurant', { method: 'PATCH', body: JSON.stringify(data) });
+                const refreshed = await fetch('/api/restaurant');
+                restaurantData = await refreshed.json();
+                fillForms();
+                showSuccess();
+                await Promise.all([loadStatus(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
             }
-        });
+        }
 
-        async function loadHelp() {
-            const res = await fetch('/api/help/articles');
-            const articles = await res.json();
-            const container = document.getElementById('helpArticles');
-            container.innerHTML = '';
-            articles.forEach(a => {
-                container.innerHTML += `<div class="card"><div class="badge badge-free" style="margin-bottom: 1rem;">${escapeHtml(a.article_type.toUpperCase())}</div><h3>${escapeHtml(a.title)}</h3><a href="/help.html?article=${encodeURIComponent(a.id)}">Lesen</a></div>`;
+        async function loadStatus() {
+            const status = await api('/api/restaurant/status');
+            currentStatus = status;
+            const publishedClass = status.isPublished ? 'status-ok' : 'status-muted';
+            const domainClass = status.freeDomainStatus === 'active' ? 'status-ok' : (status.freeDomainStatus === 'pending' ? 'status-warn' : 'status-muted');
+            const publishedLink = status.localPublishedUrl ? `<a href="${escapeAttr(status.localPublishedUrl)}" target="_blank">öffnen</a>` : '<span class="muted">noch nicht verfügbar</span>';
+
+            document.getElementById('statusPanel').innerHTML = `
+                <div class="status-box"><div class="status-label">Restaurant</div><div class="status-value">${escapeHtml(status.restaurantName)}</div><small>${escapeHtml(status.slug)}</small></div>
+                <div class="status-box"><div class="status-label">Veröffentlichung</div><div class="status-value"><span class="status-pill ${publishedClass}">${status.isPublished ? 'published' : 'draft'}</span></div><small>${publishedLink}</small></div>
+                <div class="status-box"><div class="status-label">Kostenlose Adresse</div><div class="status-value">${escapeHtml(status.freeHostname)}</div><small><span class="status-pill ${domainClass}">${escapeHtml(status.freeDomainStatus)}</span></small></div>
+                <div class="status-box"><div class="status-label">Template / Tarif</div><div class="status-value">${escapeHtml(status.template || 'free_default')} / ${escapeHtml(status.plan)}</div><small>${status.lastPublishStatus ? `letztes Event: ${escapeHtml(status.lastPublishStatus)}` : 'kein Publish-Event'}</small></div>
+                <div class="status-box"><div class="status-label">Nächster Schritt</div><div class="status-value">${escapeHtml(status.nextStep)}</div></div>
+            `;
+            renderPlanPanel();
+        }
+
+        async function loadOnboarding() {
+            const guide = await api('/api/restaurant/onboarding');
+            const nextLabel = guide.next ? guide.next.label : 'Alle Schritte geprüft';
+            document.getElementById('onboardingPanel').innerHTML = `
+                <div class="section-header" style="margin-bottom: 1rem;">
+                    <div><h2>Geführter Start</h2><p class="muted">Nächster Schritt: ${escapeHtml(nextLabel)}</p></div>
+                    <span class="status-pill ${guide.completed === guide.total ? 'status-ok' : 'status-warn'}">${guide.completed}/${guide.total}</span>
+                </div>
+                <div style="display: grid; gap: 0.75rem;">
+                    ${guide.steps.map(step => `
+                        <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: center; border-top: 1px solid var(--border); padding-top: 0.75rem;">
+                            <div><span class="status-pill ${step.done ? 'status-ok' : 'status-muted'}">${step.done ? 'erledigt' : 'offen'}</span> <span>${escapeHtml(step.label)}</span></div>
+                            ${renderOnboardingAction(step)}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderOnboardingAction(step) {
+            if (step.targetTab) return `<button class="btn-sm secondary" type="button" onclick="showTab('${escapeAttr(step.targetTab)}')">Öffnen</button>`;
+            if (step.url) return `<a class="btn-sm secondary" href="${escapeAttr(step.url)}" target="_blank">Öffnen</a>`;
+            if (step.action === 'publish') return '<button class="btn-sm secondary" type="button" onclick="document.getElementById(\'publishBtn\').click()">Starten</button>';
+            if (step.action === 'cf-prepare') return '<button class="btn-sm secondary" type="button" onclick="document.getElementById(\'cfPrepareBtn\').click()">Starten</button>';
+            return '';
+        }
+
+        async function loadHours() {
+            const hours = await api('/api/opening-hours');
+            const grid = document.getElementById('hoursList');
+            grid.innerHTML = '';
+            weekdays.forEach((day, i) => {
+                const h = hours.find(x => x.weekday === i) || { weekday: i, is_closed: 0, open_time_1: '09:00', close_time_1: '22:00' };
+                grid.innerHTML += `
+                    <strong>${escapeHtml(day)}</strong>
+                    <div class="hours-row">
+                        <label><input type="checkbox" name="closed-${i}" ${h.is_closed ? 'checked' : ''}> Geschlossen</label>
+                        <input type="time" name="open1-${i}" value="${escapeAttr(h.open_time_1 || '')}">
+                        <input type="time" name="close1-${i}" value="${escapeAttr(h.close_time_1 || '')}">
+                        <input type="time" name="open2-${i}" value="${escapeAttr(h.open_time_2 || '')}">
+                        <input type="time" name="close2-${i}" value="${escapeAttr(h.close_time_2 || '')}">
+                        <input type="text" name="note-${i}" placeholder="Notiz" value="${escapeAttr(h.note || '')}">
+                    </div>
+                `;
             });
         }
+
+        async function saveHours(event) {
+            event.preventDefault();
+            const form = event.target;
+            const hours = weekdays.map((_, i) => ({
+                weekday: i,
+                is_closed: form.querySelector(`[name="closed-${i}"]`).checked,
+                open_time_1: form.querySelector(`[name="open1-${i}"]`).value,
+                close_time_1: form.querySelector(`[name="close1-${i}"]`).value,
+                open_time_2: form.querySelector(`[name="open2-${i}"]`).value,
+                close_time_2: form.querySelector(`[name="close2-${i}"]`).value,
+                note: form.querySelector(`[name="note-${i}"]`).value
+            }));
+
+            try {
+                await api('/api/opening-hours', { method: 'POST', body: JSON.stringify({ hours }) });
+                showSuccess();
+                await Promise.all([loadOnboarding(), loadHours()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function loadClosures() {
+            currentClosures = await api('/api/special-closures');
+            const container = document.getElementById('closuresList');
+            if (!currentClosures.length) {
+                container.innerHTML = '<div class="card"><p class="muted">Keine Sonderschließungen eingetragen.</p></div>';
+                return;
+            }
+            container.innerHTML = currentClosures.map(item => `
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="section-header" style="margin-bottom: 0.75rem;">
+                        <div>
+                            <h3>${escapeHtml(item.title)}</h3>
+                            <p class="muted">${escapeHtml(item.start_date)} bis ${escapeHtml(item.end_date)} · ${item.is_active ? 'aktiv' : 'inaktiv'}</p>
+                        </div>
+                        <div class="toolbar">
+                            <button class="btn-sm secondary" type="button" onclick="openClosureModal(${item.id})">Bearbeiten</button>
+                            <button class="btn-sm secondary" type="button" onclick="toggleClosure(${item.id}, ${item.is_active ? 0 : 1})">${item.is_active ? 'Deaktivieren' : 'Aktivieren'}</button>
+                            <button class="btn-sm btn-danger" type="button" onclick="deleteClosure(${item.id})">Löschen</button>
+                        </div>
+                    </div>
+                    ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function openClosureModal(id = null) {
+            const item = id ? currentClosures.find(x => x.id === id) : {};
+            openModal(`
+                <h2>${id ? 'Schließzeit bearbeiten' : 'Neue Schließzeit'}</h2>
+                <form id="closureForm">
+                    <div class="form-group"><label>Titel</label><input type="text" name="title" required value="${escapeAttr(item.title || '')}"></div>
+                    <div class="grid">
+                        <div class="form-group"><label>Startdatum</label><input type="date" name="start_date" required value="${escapeAttr(item.start_date || '')}"></div>
+                        <div class="form-group"><label>Enddatum</label><input type="date" name="end_date" required value="${escapeAttr(item.end_date || '')}"></div>
+                    </div>
+                    <div class="form-group"><label>Hinweis</label><textarea name="note" rows="3">${escapeHtml(item.note || '')}</textarea></div>
+                    <label><input type="checkbox" name="is_active" ${!id || item.is_active ? 'checked' : ''}> Aktiv</label>
+                    <div class="toolbar" style="margin-top: 1.5rem;">
+                        <button type="submit">Speichern</button>
+                        <button type="button" class="secondary" onclick="closeModal()">Abbrechen</button>
+                    </div>
+                </form>
+            `);
+            document.getElementById('closureForm').addEventListener('submit', event => saveClosure(event, id));
+        }
+
+        async function saveClosure(event, id) {
+            event.preventDefault();
+            const data = Object.fromEntries(new FormData(event.target).entries());
+            data.is_active = event.target.querySelector('[name="is_active"]').checked;
+            try {
+                await api(id ? `/api/special-closures/${id}` : '/api/special-closures', {
+                    method: id ? 'PATCH' : 'POST',
+                    body: JSON.stringify(data)
+                });
+                closeModal();
+                showSuccess();
+                await Promise.all([loadClosures(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function toggleClosure(id, active) {
+            try {
+                await api(`/api/special-closures/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active: active }) });
+                await loadClosures();
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function deleteClosure(id) {
+            if (!confirm('Schließzeit löschen?')) return;
+            try {
+                await api(`/api/special-closures/${id}`, { method: 'DELETE' });
+                await Promise.all([loadClosures(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function loadMenu() {
+            currentMenu = await api('/api/menu');
+            const container = document.getElementById('menuStructure');
+            if (!currentMenu.categories.length) {
+                container.innerHTML = '<div class="card"><p class="muted">Keine Kategorien angelegt.</p></div>';
+                return;
+            }
+
+            container.innerHTML = currentMenu.categories.map(cat => `
+                <div class="menu-cat">
+                    <div class="section-header" style="margin-bottom: 0.75rem;">
+                        <div>
+                            <h3>${escapeHtml(cat.category_name)}</h3>
+                            <p class="muted">${escapeHtml(cat.display_mode)} · Sortierung ${escapeHtml(cat.sort_order)} · ${cat.is_active ? 'aktiv' : 'inaktiv'}</p>
+                        </div>
+                        <div class="toolbar">
+                            <button class="btn-sm secondary" type="button" onclick="openCategoryModal(${cat.id})">Bearbeiten</button>
+                            <button class="btn-sm" type="button" onclick="openDishModal(null, ${cat.id})">Gericht</button>
+                            <button class="btn-sm secondary" type="button" onclick="toggleCategory(${cat.id}, ${cat.is_active ? 0 : 1})">${cat.is_active ? 'Deaktivieren' : 'Aktivieren'}</button>
+                            <button class="btn-sm btn-danger" type="button" onclick="deleteCategory(${cat.id})">Löschen</button>
+                        </div>
+                    </div>
+                    ${cat.dishes.length ? cat.dishes.map(renderDish).join('') : '<p class="muted">Keine Gerichte in dieser Kategorie.</p>'}
+                </div>
+            `).join('');
+        }
+
+        function renderDish(dish) {
+            const image = safeHttpUrl(dish.image_url);
+            return `
+                <div class="menu-item">
+                    ${image ? `<img class="thumb" src="${escapeAttr(image)}" alt="">` : '<div class="thumb"></div>'}
+                    <div>
+                        <strong>${escapeHtml(dish.dish_name)} · ${(dish.price_cents / 100).toFixed(2)}€</strong>
+                        ${dish.badge_text ? `<span class="status-pill status-muted" style="margin-left: 0.5rem;">${escapeHtml(dish.badge_text)}</span>` : ''}
+                        <p class="meta-line">${escapeHtml(dish.description_text || '')}</p>
+                        ${dish.ingredients_text ? `<div class="meta-line">Zutaten: ${escapeHtml(dish.ingredients_text)}</div>` : ''}
+                        ${dish.allergens_text ? `<div class="meta-line">Allergene: ${escapeHtml(dish.allergens_text)}</div>` : ''}
+                        <div class="meta-line">Sortierung ${escapeHtml(dish.sort_order)} · ${dish.is_active ? 'aktiv' : 'inaktiv'}</div>
+                    </div>
+                    <div class="toolbar">
+                        <button class="btn-sm secondary" type="button" onclick="openDishModal(${dish.id})">Bearbeiten</button>
+                        <button class="btn-sm secondary" type="button" onclick="toggleDish(${dish.id}, ${dish.is_active ? 0 : 1})">${dish.is_active ? 'Deaktivieren' : 'Aktivieren'}</button>
+                        <button class="btn-sm btn-danger" type="button" onclick="deleteDish(${dish.id})">Löschen</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function openCategoryModal(id = null) {
+            const item = id ? currentMenu.categories.find(x => x.id === id) : {};
+            openModal(`
+                <h2>${id ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</h2>
+                <form id="categoryForm">
+                    <div class="form-group"><label>Name</label><input type="text" name="category_name" required value="${escapeAttr(item.category_name || '')}"></div>
+                    <div class="grid">
+                        <div class="form-group"><label>Anzeige</label><select name="display_mode"><option value="vertical" ${item.display_mode !== 'horizontal' ? 'selected' : ''}>Vertikal</option><option value="horizontal" ${item.display_mode === 'horizontal' ? 'selected' : ''}>Horizontal</option></select></div>
+                        <div class="form-group"><label>Sortierung</label><input type="number" name="sort_order" value="${escapeAttr(item.sort_order ?? '')}"></div>
+                    </div>
+                    <label><input type="checkbox" name="is_active" ${!id || item.is_active ? 'checked' : ''}> Aktiv</label>
+                    <div class="toolbar" style="margin-top: 1.5rem;">
+                        <button type="submit">Speichern</button>
+                        <button type="button" class="secondary" onclick="closeModal()">Abbrechen</button>
+                    </div>
+                </form>
+            `);
+            document.getElementById('categoryForm').addEventListener('submit', event => saveCategory(event, id));
+        }
+
+        async function saveCategory(event, id) {
+            event.preventDefault();
+            const data = Object.fromEntries(new FormData(event.target).entries());
+            data.is_active = event.target.querySelector('[name="is_active"]').checked;
+            if (!id) data.menu_id = currentMenu.id;
+            try {
+                await api(id ? `/api/menu/categories/${id}` : '/api/menu/categories', {
+                    method: id ? 'PATCH' : 'POST',
+                    body: JSON.stringify(data)
+                });
+                closeModal();
+                showSuccess();
+                await Promise.all([loadMenu(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        function findDish(id) {
+            for (const cat of currentMenu.categories) {
+                const dish = cat.dishes.find(item => item.id === id);
+                if (dish) return { dish, categoryId: cat.id };
+            }
+            return { dish: {}, categoryId: null };
+        }
+
+        function openDishModal(id = null, categoryId = null) {
+            const found = id ? findDish(id) : { dish: {}, categoryId };
+            const dish = found.dish || {};
+            const catId = found.categoryId || categoryId;
+            openModal(`
+                <h2>${id ? 'Gericht bearbeiten' : 'Neues Gericht'}</h2>
+                <form id="dishForm">
+                    <div class="grid">
+                        <div class="form-group"><label>Name</label><input type="text" name="dish_name" required value="${escapeAttr(dish.dish_name || '')}"></div>
+                        <div class="form-group"><label>Preis (€)</label><input type="number" step="0.01" min="0" name="price" required value="${dish.price_cents !== undefined ? escapeAttr((dish.price_cents / 100).toFixed(2)) : ''}"></div>
+                    </div>
+                    <div class="form-group"><label>Beschreibung</label><textarea name="description_text" rows="3">${escapeHtml(dish.description_text || '')}</textarea></div>
+                    <div class="grid">
+                        <div class="form-group"><label>Zutaten</label><textarea name="ingredients_text" rows="3">${escapeHtml(dish.ingredients_text || '')}</textarea></div>
+                        <div class="form-group"><label>Allergene</label><textarea name="allergens_text" rows="3">${escapeHtml(dish.allergens_text || '')}</textarea></div>
+                    </div>
+                    <div class="grid">
+                        <div class="form-group"><label>Badge</label><input type="text" name="badge_text" value="${escapeAttr(dish.badge_text || '')}"></div>
+                        <div class="form-group"><label>Sortierung</label><input type="number" name="sort_order" value="${escapeAttr(dish.sort_order ?? '')}"></div>
+                    </div>
+                    <div class="form-group"><label>Bild URL</label><input type="url" name="image_url" value="${escapeAttr(dish.image_url || '')}"></div>
+                    <label><input type="checkbox" name="is_active" ${!id || dish.is_active ? 'checked' : ''}> Aktiv</label>
+                    <div class="toolbar" style="margin-top: 1.5rem;">
+                        <button type="submit">Speichern</button>
+                        <button type="button" class="secondary" onclick="closeModal()">Abbrechen</button>
+                    </div>
+                </form>
+            `);
+            document.getElementById('dishForm').addEventListener('submit', event => saveDish(event, id, catId));
+        }
+
+        async function saveDish(event, id, categoryId) {
+            event.preventDefault();
+            const data = Object.fromEntries(new FormData(event.target).entries());
+            data.price_cents = Math.round(Number(data.price) * 100);
+            delete data.price;
+            data.is_active = event.target.querySelector('[name="is_active"]').checked;
+            if (!id) data.category_id = categoryId;
+            try {
+                await api(id ? `/api/dishes/${id}` : '/api/dishes', {
+                    method: id ? 'PATCH' : 'POST',
+                    body: JSON.stringify(data)
+                });
+                closeModal();
+                showSuccess();
+                await Promise.all([loadMenu(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function toggleCategory(id, active) {
+            try {
+                await api(`/api/menu/categories/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active: active }) });
+                await Promise.all([loadMenu(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function deleteCategory(id) {
+            if (!confirm('Kategorie löschen?')) return;
+            try {
+                await api(`/api/menu/categories/${id}`, { method: 'DELETE' });
+                await Promise.all([loadMenu(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function toggleDish(id, active) {
+            try {
+                await api(`/api/dishes/${id}`, { method: 'PATCH', body: JSON.stringify({ is_active: active }) });
+                await Promise.all([loadMenu(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        async function deleteDish(id) {
+            if (!confirm('Gericht löschen?')) return;
+            try {
+                await api(`/api/dishes/${id}`, { method: 'DELETE' });
+                await Promise.all([loadMenu(), loadOnboarding()]);
+            } catch (error) {
+                showAlert(error.message);
+            }
+        }
+
+        function renderPlanPanel() {
+            if (!currentStatus) return;
+            const paidEnabled = currentStatus.plan === 'paid';
+            document.getElementById('planPanel').innerHTML = `
+                <div class="card">
+                    <h3>Aktueller Tarif</h3>
+                    <p><span class="status-pill ${paidEnabled ? 'status-ok' : 'status-muted'}">${escapeHtml(currentStatus.plan)}</span></p>
+                    <p class="muted">${paidEnabled ? 'Werbung und Spendenhinweis sind für Paid-Seiten deaktiviert.' : 'Free-Seiten enthalten Restiq-Branding, Werbeplätze und Spendenhinweis.'}</p>
+                    <button type="button" class="secondary" disabled>Upgrade vorbereiten</button>
+                </div>
+                <div class="card">
+                    <h3>Kostenlose Domain</h3>
+                    <p>${escapeHtml(currentStatus.freeHostname)}</p>
+                    <p><span class="status-pill ${currentStatus.freeDomainStatus === 'active' ? 'status-ok' : 'status-warn'}">${escapeHtml(currentStatus.freeDomainStatus)}</span></p>
+                </div>
+                <div class="card">
+                    <h3>Eigene Domain</h3>
+                    <p class="muted">Custom-Domain-Verwaltung wird in der bezahlten Stufe aktiviert.</p>
+                    <input type="text" disabled placeholder="www.restaurant.de">
+                </div>
+            `;
+        }
+
+        async function loadHelp() {
+            const articles = await api('/api/help/articles');
+            document.getElementById('helpArticles').innerHTML = articles.map(a => `
+                <div class="card">
+                    <div class="badge badge-free" style="margin-bottom: 1rem;">${escapeHtml(a.article_type.toUpperCase())}</div>
+                    <h3>${escapeHtml(a.title)}</h3>
+                    <a href="/help.html?article=${encodeURIComponent(a.id)}">Lesen</a>
+                </div>
+            `).join('');
+        }
+
+        function openModal(html) {
+            document.getElementById('modalContent').innerHTML = html;
+            document.getElementById('modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.add('hidden');
+            document.getElementById('modalContent').innerHTML = '';
+        }
+
+        document.getElementById('baseForm').addEventListener('submit', event => {
+            event.preventDefault();
+            saveRestaurantForm(event.target);
+        });
+
+        document.getElementById('designForm').addEventListener('submit', event => {
+            event.preventDefault();
+            saveRestaurantForm(event.target);
+        });
+
+        document.getElementById('hoursForm').addEventListener('submit', saveHours);
+
+        document.getElementById('setupForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const data = Object.fromEntries(new FormData(event.target).entries());
+            try {
+                await api('/api/restaurant/setup', { method: 'POST', body: JSON.stringify(data) });
+                window.location.reload();
+            } catch (error) {
+                showAlert(error.message);
+            }
+        });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
             fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = 'index.html');
         });
 
-        document.getElementById('publishBtn').addEventListener('click', async (e) => {
-            e.preventDefault();
-            const btn = e.target;
-            const originalText = btn.textContent;
+        document.getElementById('publishBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('publishBtn');
+            const oldText = btn.textContent;
             btn.textContent = 'Veröffentliche...';
-            
             try {
-                const res = await fetch('/api/restaurant/publish', { method: 'POST' });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    const alert = document.getElementById('alert');
-                    const slug = restaurantData.public_slug_internal;
-                    alert.innerHTML = `Erfolgreich veröffentlicht. <a href="/published/${slug}" target="_blank">Veröffentlichte Seite öffnen</a><br><small>${data.exportPath}</small>`;
-                    alert.className = 'alert alert-success';
-                    alert.classList.remove('hidden');
-                    loadStatus();
-                    loadOnboarding();
-                } else {
-                    const alert = document.getElementById('alert');
-                    alert.textContent = data.error || 'Fehler beim Veröffentlichen.';
-                    alert.className = 'alert alert-error';
-                    alert.classList.remove('hidden');
-                }
-            } catch(err) {
-                const alert = document.getElementById('alert');
-                alert.textContent = 'Serverfehler beim Veröffentlichen.';
-                alert.className = 'alert alert-error';
-                alert.classList.remove('hidden');
+                const data = await api('/api/restaurant/publish', { method: 'POST' });
+                await Promise.all([loadStatus(), loadOnboarding()]);
+                showAlert(`Erfolgreich veröffentlicht: ${data.exportPath}`, 'success');
+            } catch (error) {
+                showAlert(error.message);
+            } finally {
+                btn.textContent = oldText;
             }
-            
-            btn.textContent = originalText;
-            setTimeout(() => document.getElementById('alert').classList.add('hidden'), 8000);
         });
 
-        // --- Cloudflare Pages Vorbereitung ---
-
-        document.getElementById('cfPrepareBtn').addEventListener('click', async (e) => {
-            e.preventDefault();
-            const btn = e.target;
-            const alertBox = document.getElementById('alert');
-            btn.textContent = '☁ Bereite vor...';
-
+        document.getElementById('cfPrepareBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('cfPrepareBtn');
+            const oldText = btn.textContent;
+            btn.textContent = 'Bereite vor...';
             try {
-                const res = await fetch('/api/restaurant/cf-prepare', { method: 'POST' });
-                const data = await res.json();
-
-                if (res.ok) {
-                    alertBox.innerHTML = `
-                        <strong>✓ Cloudflare Export bereit</strong><br>
-                        Ziel-Hostname (vorbereitet): <code>${data.targetHostname}</code><br>
-                        Export-Pfad: <code>${data.cfExportPath}</code><br>
-                        <small>${data.note}</small><br>
-                        <small><em>Hinweis: Keine echte Cloudflare-Verbindung aktiv. Deployment über CLI oder Dashboard nötig.</em></small>
-                    `;
-                    alertBox.className = 'alert alert-success';
-                    alertBox.classList.remove('hidden');
-                    loadStatus();
-                    loadOnboarding();
-                } else {
-                    alertBox.textContent = data.error || 'Fehler bei der CF-Vorbereitung.';
-                    alertBox.className = 'alert alert-error';
-                    alertBox.classList.remove('hidden');
-                }
-            } catch (err) {
-                alertBox.textContent = 'Serverfehler bei der CF-Vorbereitung.';
-                alertBox.className = 'alert alert-error';
-                alertBox.classList.remove('hidden');
+                const data = await api('/api/restaurant/cf-prepare', { method: 'POST' });
+                await Promise.all([loadStatus(), loadOnboarding()]);
+                showAlert(`Cloudflare Export bereit: ${data.targetHostname}`, 'success');
+            } catch (error) {
+                showAlert(error.message);
+            } finally {
+                btn.textContent = oldText;
             }
-
-            btn.textContent = '☁ Cloudflare vorbereiten';
-            setTimeout(() => document.getElementById('alert').classList.add('hidden'), 12000);
         });
 
-        init();
+        document.getElementById('modal').addEventListener('click', event => {
+            if (event.target.id === 'modal') closeModal();
+        });
+
+        init().catch(error => showAlert(error.message));
     </script>
 </body>
 </html>

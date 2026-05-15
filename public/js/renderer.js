@@ -103,16 +103,34 @@ const Renderer = {
                 let timeStr = 'Geschlossen';
                 if (h && !h.isClosed) {
                     timeStr = h.slots.map(s => `${this.escapeHtml(s.open)} - ${this.escapeHtml(s.close)}`).join('<br>');
+                    if (!timeStr) timeStr = 'Nach Vereinbarung';
                 }
+                const note = h && h.note ? `<div style="font-size: 0.75rem; color: #64748b;">${this.escapeHtml(h.note)}</div>` : '';
                 html += `
                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9;">
                         <span>${this.escapeHtml(day)}</span>
-                        <span style="text-align: right;">${timeStr}</span>
+                        <span style="text-align: right;">${timeStr}${note}</span>
                     </div>
                 `;
             });
             html += '</div>';
             return html;
+        },
+        specialClosures(closures) {
+            if (!Array.isArray(closures) || closures.length === 0) return '';
+
+            return `
+                <div class="special-closures" style="background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 1rem; border-radius: 8px; margin: 1.5rem 0;">
+                    <strong>Aktuelle Hinweise</strong>
+                    ${closures.map(item => `
+                        <div style="margin-top: 0.75rem;">
+                            <div>${this.escapeHtml(item.title)}</div>
+                            <div style="font-size: 0.85rem;">${this.escapeHtml(item.startDate)} bis ${this.escapeHtml(item.endDate)}</div>
+                            ${item.note ? `<div style="font-size: 0.85rem; margin-top: 0.25rem;">${this.escapeHtml(item.note)}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
         }
     }
 };

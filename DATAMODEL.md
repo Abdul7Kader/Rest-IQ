@@ -58,6 +58,12 @@ Die Speisekarte ist hierarchisch aufgebaut:
 - **Zutaten & Allergene**: Diese Informationen werden in getrennten Textfeldern gespeichert (`ingredients_text`, `allergens_text`), um spätere Filterfunktionen oder spezialisierte Darstellungen (Icons) zu ermöglichen.
 - **Display Modes**: Kategorien unterstützen bereits jetzt die Modi `vertical` (Standard) und `horizontal` (Premium-Layout), um die fachliche Unterscheidung in den Templates vorzubereiten.
 
+## 5.1 Öffnungszeiten & Sonderschließungen
+
+- **Reguläre Öffnungszeiten**: `opening_hours` speichert pro Wochentag bis zu zwei Zeitfenster plus Notiz.
+- **Sonderschließungen**: `special_closures` speichert Urlaubszeiten, Feiertage oder temporäre Schließungen mit Startdatum, Enddatum, Titel, Hinweis und Aktivstatus.
+- **Darstellung**: Aktive aktuelle oder kommende Sonderschließungen werden in Preview und Published-Seite aus dem zentralen ViewModel angezeigt.
+
 ## 6. Audit & History
 
 - `publish_events`: Hält fest, wann welche Änderung auf welcher Domain veröffentlicht wurde.

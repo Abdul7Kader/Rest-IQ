@@ -105,6 +105,119 @@ function establishSession(req, user) {
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
 
+function trimText(value, maxLength = 500) {
+    return String(value || '').trim().slice(0, maxLength);
+}
+
+function normalizeNullableText(value, maxLength = 500) {
+    const text = trimText(value, maxLength);
+    return text || null;
+}
+
+function normalizeHttpUrl(value) {
+    const url = trimText(value, 1000);
+    if (!url) return null;
+
+    try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+            throw new Error('INVALID_URL_PROTOCOL');
+        }
+        return parsed.href;
+    } catch (error) {
+        throw new Error('INVALID_URL');
+    }
+}
+
+function normalizeCssColor(value) {
+    const color = trimText(value, 20);
+    if (!color) return null;
+    if (!/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color)) {
+        throw new Error('INVALID_COLOR');
+    }
+    return color;
+}
+
+function normalizeTemplateKey(value) {
+    const template = trimText(value, 50) || 'free_default';
+    if (!['free_default', 'free_classic'].includes(template)) {
+        throw new Error('INVALID_TEMPLATE');
+    }
+    return template;
+}
+
+function normalizeTime(value) {
+    const time = trimText(value, 5);
+    if (!time) return null;
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+        throw new Error('INVALID_TIME');
+    }
+    return time;
+}
+
+function normalizeDate(value) {
+    const date = trimText(value, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        throw new Error('INVALID_DATE');
+    }
+
+    const parsed = new Date(`${date}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) {
+        throw new Error('INVALID_DATE');
+    }
+    return date;
+}
+
+function normalizeInteger(value, fallback = 0) {
+    if (value === undefined || value === null || value === '') return fallback;
+    const number = Number(value);
+    if (!Number.isInteger(number)) throw new Error('INVALID_INTEGER');
+    return number;
+}
+
+function normalizePriceCents(value) {
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < 0 || number > 999999) {
+        throw new Error('INVALID_PRICE');
+    }
+    return number;
+}
+
+function normalizeDisplayMode(value) {
+    const mode = trimText(value, 20) || 'vertical';
+    if (!['vertical', 'horizontal'].includes(mode)) {
+        throw new Error('INVALID_DISPLAY_MODE');
+    }
+    return mode;
+}
+
+function normalizeBooleanFlag(value) {
+    return value === false || value === 0 || value === '0' || value === 'false' ? 0 : 1;
+}
+
+function getOwnerRestaurant(userId) {
+    return db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(userId);
+}
+
+function sendValidationError(res, error) {
+    const messages = {
+        INVALID_URL: 'Only valid http/https URLs are allowed.',
+        INVALID_URL_PROTOCOL: 'Only http/https URLs are allowed.',
+        INVALID_COLOR: 'Invalid color value.',
+        INVALID_TEMPLATE: 'Invalid template selection.',
+        INVALID_TIME: 'Invalid time format. Use HH:MM.',
+        INVALID_DATE: 'Invalid date format. Use YYYY-MM-DD.',
+        INVALID_DATE_RANGE: 'End date must be on or after start date.',
+        INVALID_INTEGER: 'Invalid numeric value.',
+        INVALID_PRICE: 'Invalid price.',
+        INVALID_DISPLAY_MODE: 'Invalid display mode.',
+        REQUIRED_TITLE: 'Title is required.',
+        REQUIRED_NAME: 'Name is required.',
+        REQUIRED_PRICE: 'Price is required.'
+    };
+    return res.status(400).json({ error: messages[error.message] || 'Invalid input.' });
+}
+
 function slugify(value) {
     return String(value || '')
         .toLowerCase()
@@ -262,6 +375,25 @@ function ensureDefaultHelpArticles() {
         }
     });
     transaction();
+}
+
+function ensureApplicationTables() {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS special_closures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            restaurant_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT NOT NULL,
+            note TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_special_closures_restaurant_id ON special_closures(restaurant_id);
+        CREATE INDEX IF NOT EXISTS idx_special_closures_dates ON special_closures(start_date, end_date);
+    `);
 }
 
 // --- Auth Routes ---
@@ -482,6 +614,7 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
     }
 
     const openingHoursCount = db.prepare('SELECT COUNT(*) as count FROM opening_hours WHERE restaurant_id = ?').get(restaurant.id).count;
+    const closuresCount = db.prepare('SELECT COUNT(*) as count FROM special_closures WHERE restaurant_id = ? AND is_active = 1').get(restaurant.id).count;
     const menuStats = db.prepare(`
         SELECT COUNT(DISTINCT mc.id) as categories, COUNT(d.id) as dishes
         FROM menus m
@@ -501,12 +634,14 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
     const hasDesign = Boolean(restaurant.hero_title || restaurant.hero_subtitle || restaurant.about_text || restaurant.logo_image_url || restaurant.hero_image_url);
     const hasMenu = menuStats.categories > 0 && menuStats.dishes > 0;
     const hasHours = openingHoursCount >= 7;
+    const hasClosures = closuresCount > 0;
     const isPublished = restaurant.is_published === 1;
     const cfPrepared = restaurant.free_domain_status === 'pending' || restaurant.free_domain_status === 'active';
 
     const steps = [
         { key: 'basics', label: 'Grunddaten vervollständigen', done: hasBasics, targetTab: 'base' },
         { key: 'hours', label: 'Öffnungszeiten prüfen', done: hasHours, targetTab: 'hours' },
+        { key: 'closures', label: 'Urlaub und Schließzeiten prüfen', done: hasClosures, targetTab: 'closures' },
         { key: 'menu', label: 'Speisekarte mit Kategorien und Gerichten pflegen', done: hasMenu, targetTab: 'menu' },
         { key: 'design', label: 'Design, Hero und Beschreibung prüfen', done: hasDesign, targetTab: 'design' },
         { key: 'preview', label: 'Vorschau öffnen und Seite kontrollieren', done: isPublished, url: '/preview' },
@@ -529,35 +664,69 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
     });
 });
 
-app.patch('/api/restaurant', isAuthenticated, (req, res) => {
-    const fields = [
-        'restaurant_name', 'short_description', 'contact_email', 'contact_phone', 
-        'street', 'house_number', 'postal_code', 'city', 'country', 
-        'whatsapp', 'instagram_url', 'facebook_url', 'tiktok_url'
-    ];
-    const configFields = [
-        'hero_title', 'hero_subtitle', 'about_text', 'logo_image_url', 
-        'hero_image_url', 'footer_note', 'accent_color', 'primary_language',
-        'template_key'
-    ];
-    
+app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const restaurantNormalizers = {
+        restaurant_name: value => {
+            const name = trimText(value, 160);
+            if (!name) throw new Error('REQUIRED_NAME');
+            return name;
+        },
+        short_description: value => trimText(value, 500),
+        contact_email: value => {
+            const email = normalizeEmail(value);
+            if (email && !isValidEmail(email)) throw new Error('INVALID_EMAIL');
+            return email;
+        },
+        contact_phone: value => trimText(value, 80),
+        street: value => trimText(value, 160),
+        house_number: value => trimText(value, 40),
+        postal_code: value => trimText(value, 20),
+        city: value => trimText(value, 120),
+        country: value => trimText(value, 80) || 'Deutschland',
+        whatsapp: value => trimText(value, 80),
+        instagram_url: normalizeHttpUrl,
+        facebook_url: normalizeHttpUrl,
+        tiktok_url: normalizeHttpUrl
+    };
+    const configNormalizers = {
+        hero_title: value => trimText(value, 180),
+        hero_subtitle: value => trimText(value, 280),
+        about_text: value => trimText(value, 2500),
+        logo_image_url: normalizeHttpUrl,
+        hero_image_url: normalizeHttpUrl,
+        footer_note: value => trimText(value, 300),
+        accent_color: normalizeCssColor,
+        primary_language: value => trimText(value, 10) || 'de',
+        template_key: normalizeTemplateKey
+    };
+
     const updates = [];
     const values = [];
-
-    for (const field of fields) {
-        if (req.body[field] !== undefined) {
-            updates.push(`${field} = ?`);
-            values.push(req.body[field]);
-        }
-    }
-
     const configUpdates = [];
     const configValues = [];
-    for (const field of configFields) {
-        if (req.body[field] !== undefined) {
-            configUpdates.push(`${field} = ?`);
-            configValues.push(req.body[field]);
+
+    try {
+        for (const [field, normalizer] of Object.entries(restaurantNormalizers)) {
+            if (req.body[field] !== undefined) {
+                updates.push(`${field} = ?`);
+                values.push(normalizer(req.body[field]));
+            }
         }
+
+        for (const [field, normalizer] of Object.entries(configNormalizers)) {
+            if (req.body[field] !== undefined) {
+                configUpdates.push(`${field} = ?`);
+                configValues.push(normalizer(req.body[field]));
+            }
+        }
+    } catch (error) {
+        if (error.message === 'INVALID_EMAIL') {
+            return res.status(400).json({ error: 'Invalid email address.' });
+        }
+        return sendValidationError(res, error);
     }
 
     if (updates.length === 0 && configUpdates.length === 0) {
@@ -571,7 +740,6 @@ app.patch('/api/restaurant', isAuthenticated, (req, res) => {
                 db.prepare(`UPDATE restaurants SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE owner_user_id = ?`).run(...values);
             }
             if (configUpdates.length > 0) {
-                const restaurant = db.prepare('SELECT id FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
                 configValues.push(restaurant.id);
                 db.prepare(`UPDATE site_configs SET ${configUpdates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE restaurant_id = ?`).run(...configValues);
             }
@@ -585,7 +753,7 @@ app.patch('/api/restaurant', isAuthenticated, (req, res) => {
 
 // --- Opening Hours ---
 
-app.get('/api/opening-hours', isAuthenticated, (req, res) => {
+app.get('/api/opening-hours', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const hours = db.prepare(`
         SELECT oh.* FROM opening_hours oh
         JOIN restaurants r ON oh.restaurant_id = r.id
@@ -595,11 +763,44 @@ app.get('/api/opening-hours', isAuthenticated, (req, res) => {
     res.json(hours);
 });
 
-app.post('/api/opening-hours', isAuthenticated, (req, res) => {
+app.post('/api/opening-hours', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const { hours } = req.body; // Array of 7 days
-    if (!Array.isArray(hours)) return res.status(400).json({ error: 'Invalid hours format.' });
+    if (!Array.isArray(hours) || hours.length !== 7) return res.status(400).json({ error: 'Invalid hours format.' });
 
-    const restaurant = db.prepare('SELECT id FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    let normalizedHours;
+    try {
+        const seen = new Set();
+        normalizedHours = hours.map((h) => {
+            const weekday = normalizeInteger(h.weekday);
+            if (weekday < 0 || weekday > 6 || seen.has(weekday)) throw new Error('INVALID_INTEGER');
+            seen.add(weekday);
+
+            const isClosed = h.is_closed || h.isClosed;
+            const open1 = normalizeTime(h.open_time_1);
+            const close1 = normalizeTime(h.close_time_1);
+            const open2 = normalizeTime(h.open_time_2);
+            const close2 = normalizeTime(h.close_time_2);
+
+            if (!isClosed && ((open1 && !close1) || (!open1 && close1) || (open2 && !close2) || (!open2 && close2))) {
+                throw new Error('INVALID_TIME');
+            }
+
+            return {
+                weekday,
+                is_closed: isClosed ? 1 : 0,
+                open_time_1: isClosed ? null : open1,
+                close_time_1: isClosed ? null : close1,
+                open_time_2: isClosed ? null : open2,
+                close_time_2: isClosed ? null : close2,
+                note: normalizeNullableText(h.note, 200)
+            };
+        });
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
     
     const upsert = db.prepare(`
         INSERT INTO opening_hours (restaurant_id, weekday, is_closed, open_time_1, close_time_1, open_time_2, close_time_2, note)
@@ -616,20 +817,117 @@ app.post('/api/opening-hours', isAuthenticated, (req, res) => {
     try {
         const transaction = db.transaction((data) => {
             for (const h of data) {
-                upsert.run(restaurant.id, h.weekday, h.is_closed ? 1 : 0, h.open_time_1, h.close_time_1, h.open_time_2, h.close_time_2, h.note);
+                upsert.run(restaurant.id, h.weekday, h.is_closed, h.open_time_1, h.close_time_1, h.open_time_2, h.close_time_2, h.note);
             }
         });
-        transaction(hours);
+        transaction(normalizedHours);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to update hours.' });
     }
 });
 
+// --- Special Closures ---
+
+function normalizeClosurePayload(body, { partial = false } = {}) {
+    const payload = {};
+
+    if (!partial || body.title !== undefined) {
+        payload.title = trimText(body.title, 160);
+        if (!payload.title) throw new Error('REQUIRED_TITLE');
+    }
+    if (!partial || body.start_date !== undefined) payload.start_date = normalizeDate(body.start_date);
+    if (!partial || body.end_date !== undefined) payload.end_date = normalizeDate(body.end_date);
+    if (body.note !== undefined || !partial) payload.note = normalizeNullableText(body.note, 600);
+    if (body.is_active !== undefined || !partial) payload.is_active = normalizeBooleanFlag(body.is_active);
+
+    const start = payload.start_date || body.current_start_date;
+    const end = payload.end_date || body.current_end_date;
+    if (start && end && end < start) throw new Error('INVALID_DATE_RANGE');
+
+    return payload;
+}
+
+function getOwnerClosure(userId, closureId) {
+    return db.prepare(`
+        SELECT sc.* FROM special_closures sc
+        JOIN restaurants r ON sc.restaurant_id = r.id
+        WHERE sc.id = ? AND r.owner_user_id = ?
+    `).get(closureId, userId);
+}
+
+app.get('/api/special-closures', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const closures = db.prepare(`
+        SELECT * FROM special_closures
+        WHERE restaurant_id = ?
+        ORDER BY start_date ASC, id ASC
+    `).all(restaurant.id);
+    res.json(closures);
+});
+
+app.post('/api/special-closures', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    let payload;
+    try {
+        payload = normalizeClosurePayload(req.body || {});
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    const info = db.prepare(`
+        INSERT INTO special_closures (restaurant_id, title, start_date, end_date, note, is_active)
+        VALUES (?, ?, ?, ?, ?, ?)
+    `).run(restaurant.id, payload.title, payload.start_date, payload.end_date, payload.note, payload.is_active);
+
+    res.json({ success: true, id: info.lastInsertRowid });
+});
+
+app.patch('/api/special-closures/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const existing = getOwnerClosure(req.session.userId, req.params.id);
+    if (!existing) return res.status(403).json({ error: 'Forbidden' });
+
+    let payload;
+    try {
+        payload = normalizeClosurePayload({
+            ...req.body,
+            current_start_date: existing.start_date,
+            current_end_date: existing.end_date
+        }, { partial: true });
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    const fields = [];
+    const values = [];
+    for (const field of ['title', 'start_date', 'end_date', 'note', 'is_active']) {
+        if (payload[field] !== undefined) {
+            fields.push(`${field} = ?`);
+            values.push(payload[field]);
+        }
+    }
+
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
+
+    values.push(req.params.id);
+    db.prepare(`UPDATE special_closures SET ${fields.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`).run(...values);
+    res.json({ success: true });
+});
+
+app.delete('/api/special-closures/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    if (!getOwnerClosure(req.session.userId, req.params.id)) return res.status(403).json({ error: 'Forbidden' });
+    db.prepare('DELETE FROM special_closures WHERE id = ?').run(req.params.id);
+    res.json({ success: true });
+});
+
 // --- Menus, Categories, Dishes ---
 
-app.get('/api/menu', isAuthenticated, (req, res) => {
-    const restaurant = db.prepare('SELECT id FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
+app.get('/api/menu', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
     let menu = db.prepare('SELECT * FROM menus WHERE restaurant_id = ? AND is_active = 1').get(restaurant.id);
@@ -658,52 +956,122 @@ function checkCategoryOwnership(userId, categoryId) {
     `).get(categoryId, userId);
 }
 
-app.post('/api/menu/categories', isAuthenticated, (req, res) => {
-    const { menu_id, category_name, display_mode, sort_order } = req.body;
+function getNextCategorySort(menuId) {
+    const row = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 as nextSort FROM menu_categories WHERE menu_id = ?').get(menuId);
+    return row.nextSort;
+}
+
+function getNextDishSort(categoryId) {
+    const row = db.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 as nextSort FROM dishes WHERE category_id = ?').get(categoryId);
+    return row.nextSort;
+}
+
+app.post('/api/menu/categories', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const { menu_id } = req.body;
     
     // Auth Check
     const menu = db.prepare('SELECT m.id FROM menus m JOIN restaurants r ON m.restaurant_id = r.id WHERE m.id = ? AND r.owner_user_id = ?').get(menu_id, req.session.userId);
     if (!menu) return res.status(403).json({ error: 'Forbidden' });
 
+    let categoryName;
+    let displayMode;
+    let sortOrder;
     try {
-        const info = db.prepare('INSERT INTO menu_categories (menu_id, category_name, display_mode, sort_order) VALUES (?, ?, ?, ?)').run(menu_id, category_name, display_mode || 'vertical', sort_order || 0);
+        categoryName = trimText(req.body.category_name, 120);
+        if (!categoryName) throw new Error('REQUIRED_NAME');
+        displayMode = normalizeDisplayMode(req.body.display_mode);
+        sortOrder = req.body.sort_order === undefined || req.body.sort_order === ''
+            ? getNextCategorySort(menu_id)
+            : normalizeInteger(req.body.sort_order);
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    try {
+        const info = db.prepare('INSERT INTO menu_categories (menu_id, category_name, display_mode, sort_order) VALUES (?, ?, ?, ?)').run(menu_id, categoryName, displayMode, sortOrder);
         res.json({ success: true, id: info.lastInsertRowid });
     } catch (e) {
         res.status(500).json({ error: 'Failed to add category.' });
     }
 });
 
-app.patch('/api/menu/categories/:id', isAuthenticated, (req, res) => {
+app.patch('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     if (!checkCategoryOwnership(req.session.userId, req.params.id)) return res.status(403).json({ error: 'Forbidden' });
 
-    const { category_name, display_mode, sort_order, is_active } = req.body;
-    const stmt = db.prepare('UPDATE menu_categories SET category_name = ?, display_mode = ?, sort_order = ?, is_active = ? WHERE id = ?');
-    stmt.run(category_name, display_mode, sort_order, is_active ? 1 : 0, req.params.id);
+    const fields = [];
+    const values = [];
+    try {
+        if (req.body.category_name !== undefined) {
+            const name = trimText(req.body.category_name, 120);
+            if (!name) throw new Error('REQUIRED_NAME');
+            fields.push('category_name = ?');
+            values.push(name);
+        }
+        if (req.body.display_mode !== undefined) {
+            fields.push('display_mode = ?');
+            values.push(normalizeDisplayMode(req.body.display_mode));
+        }
+        if (req.body.sort_order !== undefined) {
+            fields.push('sort_order = ?');
+            values.push(normalizeInteger(req.body.sort_order));
+        }
+        if (req.body.is_active !== undefined) {
+            fields.push('is_active = ?');
+            values.push(normalizeBooleanFlag(req.body.is_active));
+        }
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
+    values.push(req.params.id);
+    db.prepare(`UPDATE menu_categories SET ${fields.join(', ')} WHERE id = ?`).run(...values);
     res.json({ success: true });
 });
 
-app.delete('/api/menu/categories/:id', isAuthenticated, (req, res) => {
+app.delete('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     if (!checkCategoryOwnership(req.session.userId, req.params.id)) return res.status(403).json({ error: 'Forbidden' });
     db.prepare('DELETE FROM menu_categories WHERE id = ?').run(req.params.id);
     res.json({ success: true });
 });
 
-app.post('/api/dishes', isAuthenticated, (req, res) => {
-    const { category_id, dish_name, price_cents, description_text, ingredients_text, allergens_text, sort_order, image_url, badge_text } = req.body;
+app.post('/api/dishes', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const { category_id } = req.body;
     if (!checkCategoryOwnership(req.session.userId, category_id)) return res.status(403).json({ error: 'Forbidden' });
+
+    let payload;
+    try {
+        const dishName = trimText(req.body.dish_name, 160);
+        if (!dishName) throw new Error('REQUIRED_NAME');
+        if (req.body.price_cents === undefined) throw new Error('REQUIRED_PRICE');
+        payload = {
+            dish_name: dishName,
+            price_cents: normalizePriceCents(req.body.price_cents),
+            description_text: trimText(req.body.description_text, 1200),
+            ingredients_text: trimText(req.body.ingredients_text, 1200),
+            allergens_text: trimText(req.body.allergens_text, 1200),
+            sort_order: req.body.sort_order === undefined || req.body.sort_order === ''
+                ? getNextDishSort(category_id)
+                : normalizeInteger(req.body.sort_order),
+            image_url: normalizeHttpUrl(req.body.image_url),
+            badge_text: normalizeNullableText(req.body.badge_text, 80)
+        };
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
 
     try {
         const info = db.prepare(`
             INSERT INTO dishes (category_id, dish_name, price_cents, description_text, ingredients_text, allergens_text, sort_order, image_url, badge_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(category_id, dish_name, price_cents, description_text || '', ingredients_text || '', allergens_text || '', sort_order || 0, image_url, badge_text);
+        `).run(category_id, payload.dish_name, payload.price_cents, payload.description_text, payload.ingredients_text, payload.allergens_text, payload.sort_order, payload.image_url, payload.badge_text);
         res.json({ success: true, id: info.lastInsertRowid });
     } catch (e) {
         res.status(500).json({ error: 'Failed to add dish.' });
     }
 });
 
-app.patch('/api/dishes/:id', isAuthenticated, (req, res) => {
+app.patch('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const dish = db.prepare(`
         SELECT d.id FROM dishes d
         JOIN menu_categories mc ON d.category_id = mc.id
@@ -713,21 +1081,42 @@ app.patch('/api/dishes/:id', isAuthenticated, (req, res) => {
     `).get(req.params.id, req.session.userId);
     if (!dish) return res.status(403).json({ error: 'Forbidden' });
 
-    const fields = ['dish_name', 'price_cents', 'description_text', 'ingredients_text', 'allergens_text', 'sort_order', 'is_active', 'image_url', 'badge_text'];
     const sets = [];
     const values = [];
-    for (const f of fields) {
-        if (req.body[f] !== undefined) {
-            sets.push(`${f} = ?`);
-            values.push(f === 'is_active' ? (req.body[f] ? 1 : 0) : req.body[f]);
+    try {
+        const fieldNormalizers = {
+            dish_name: value => {
+                const name = trimText(value, 160);
+                if (!name) throw new Error('REQUIRED_NAME');
+                return name;
+            },
+            price_cents: normalizePriceCents,
+            description_text: value => trimText(value, 1200),
+            ingredients_text: value => trimText(value, 1200),
+            allergens_text: value => trimText(value, 1200),
+            sort_order: normalizeInteger,
+            is_active: normalizeBooleanFlag,
+            image_url: normalizeHttpUrl,
+            badge_text: value => normalizeNullableText(value, 80)
+        };
+
+        for (const [field, normalizer] of Object.entries(fieldNormalizers)) {
+            if (req.body[field] !== undefined) {
+                sets.push(`${field} = ?`);
+                values.push(normalizer(req.body[field]));
+            }
         }
+    } catch (error) {
+        return sendValidationError(res, error);
     }
+
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     values.push(req.params.id);
     db.prepare(`UPDATE dishes SET ${sets.join(', ')} WHERE id = ?`).run(...values);
     res.json({ success: true });
 });
 
-app.delete('/api/dishes/:id', isAuthenticated, (req, res) => {
+app.delete('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const dish = db.prepare(`
         SELECT d.id FROM dishes d
         JOIN menu_categories mc ON d.category_id = mc.id
@@ -746,6 +1135,13 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
     const r = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurantId);
     const c = db.prepare('SELECT * FROM site_configs WHERE restaurant_id = ?').get(restaurantId);
     const hours = db.prepare('SELECT * FROM opening_hours WHERE restaurant_id = ? ORDER BY weekday ASC').all(restaurantId);
+    const today = new Date().toISOString().slice(0, 10);
+    const specialClosures = db.prepare(`
+        SELECT title, start_date, end_date, note
+        FROM special_closures
+        WHERE restaurant_id = ? AND is_active = 1 AND end_date >= ?
+        ORDER BY start_date ASC, id ASC
+    `).all(restaurantId, today);
     const menu = db.prepare('SELECT * FROM menus WHERE restaurant_id = ? AND is_active = 1').get(restaurantId);
     
     let categories = [];
@@ -799,8 +1195,14 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
             slots: [
                 { open: h.open_time_1, close: h.close_time_1 },
                 { open: h.open_time_2, close: h.close_time_2 }
-            ].filter(s => s.open),
+            ].filter(s => s.open && s.close),
             note: h.note
+        })),
+        specialClosures: specialClosures.map(item => ({
+            title: item.title,
+            startDate: item.start_date,
+            endDate: item.end_date,
+            note: item.note
         })),
         menu: {
             title: menu ? menu.title : 'Speisekarte',
@@ -1116,6 +1518,7 @@ app.get('/api/help/articles/:id', (req, res) => {
     res.json(article);
 });
 
+ensureApplicationTables();
 ensureDefaultHelpArticles();
 
 app.listen(port, () => {

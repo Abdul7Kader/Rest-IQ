@@ -4,7 +4,7 @@
  */
 
 window.free_default = function(data) {
-    const { restaurant, siteConfig, menu, hours, flags } = data;
+    const { restaurant, siteConfig, menu, hours, specialClosures, flags } = data;
     const { utils } = window.RestiqRenderer;
     const e = utils.escapeHtml;
     const heroImage = utils.imageStyle(siteConfig.hero.imageUrl);
@@ -23,6 +23,8 @@ window.free_default = function(data) {
 
             ${utils.donationHint(flags)}
 
+            ${utils.specialClosures(specialClosures)}
+
             <div class="grid" style="grid-template-columns: 2fr 1fr; gap: 3rem;">
                 <div>
                     <section style="margin-bottom: 3rem;">
@@ -37,15 +39,20 @@ window.free_default = function(data) {
                         ${menu.categories.map(cat => `
                             <div class="menu-category" style="margin-bottom: 3rem;">
                                 <h3 style="margin-bottom: 1rem; border-bottom: 1px solid var(--border);">${e(cat.name)}</h3>
-                                ${cat.dishes.map(dish => `
-                                    <div class="dish" style="display: flex; justify-content: space-between; margin-bottom: 1.5rem;">
-                                        <div>
-                                            <div style="font-weight: 600;">${e(dish.name)}</div>
+                                ${cat.dishes.map(dish => {
+                                    const dishImage = utils.safeUrl(dish.image);
+                                    return `
+                                    <div class="dish" style="display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem;">
+                                        ${dishImage ? `<img src="${dishImage}" alt="" style="width: 84px; height: 84px; object-fit: cover; border-radius: 8px;">` : ''}
+                                        <div style="flex: 1;">
+                                            <div style="font-weight: 600;">${e(dish.name)} ${dish.badge ? `<span style="font-size: 0.75rem; color: var(--accent);"> ${e(dish.badge)}</span>` : ''}</div>
                                             <div style="font-size: 0.85rem; color: var(--text-muted);">${e(dish.description)}</div>
+                                            ${dish.ingredients ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Zutaten: ${e(dish.ingredients)}</div>` : ''}
+                                            ${dish.allergens ? `<div style="font-size: 0.75rem; color: var(--text-muted);">Allergene: ${e(dish.allergens)}</div>` : ''}
                                         </div>
                                         <div style="color: var(--accent); font-weight: 700;">${e(dish.price)}€</div>
                                     </div>
-                                `).join('')}
+                                `}).join('')}
                             </div>
                         `).join('')}
                     </section>

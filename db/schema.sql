@@ -84,7 +84,22 @@ CREATE TABLE opening_hours (
     FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
 );
 
--- 5. Menus
+-- 5. Special Closures
+-- Vacations, holidays and temporary restaurant closures
+CREATE TABLE special_closures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    start_date TEXT NOT NULL, -- Format YYYY-MM-DD
+    end_date TEXT NOT NULL, -- Format YYYY-MM-DD
+    note TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
+);
+
+-- 6. Menus
 -- High level menu container
 CREATE TABLE menus (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,7 +111,7 @@ CREATE TABLE menus (
     FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
 );
 
--- 6. Menu Categories
+-- 7. Menu Categories
 -- Categories within a menu (e.g. Pizza, Drinks)
 CREATE TABLE menu_categories (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,7 +124,7 @@ CREATE TABLE menu_categories (
     FOREIGN KEY (menu_id) REFERENCES menus(id) ON DELETE CASCADE
 );
 
--- 7. Dishes
+-- 8. Dishes
 -- Specific items in a category
 CREATE TABLE dishes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +144,7 @@ CREATE TABLE dishes (
     FOREIGN KEY (category_id) REFERENCES menu_categories(id) ON DELETE CASCADE
 );
 
--- 8. Site Domains
+-- 9. Site Domains
 -- Mapping of hostnames to restaurants
 CREATE TABLE site_domains (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,7 +163,7 @@ CREATE UNIQUE INDEX idx_unique_primary_active_domain
 ON site_domains (restaurant_id) 
 WHERE is_primary = 1 AND status = 'active';
 
--- 9. Publish Events
+-- 10. Publish Events
 -- Audit log of publishing actions
 CREATE TABLE publish_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,7 +177,7 @@ CREATE TABLE publish_events (
     FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
 );
 
--- 10. Plan Change Log
+-- 11. Plan Change Log
 -- History of tier changes
 CREATE TABLE plan_change_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,7 +190,7 @@ CREATE TABLE plan_change_log (
     FOREIGN KEY (changed_by_user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- 11. Help Articles
+-- 12. Help Articles
 -- Global platform education content
 CREATE TABLE help_articles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,7 +204,7 @@ CREATE TABLE help_articles (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 12. Domain Providers
+-- 13. Domain Providers
 -- External partners for domain registration/hosting
 CREATE TABLE domain_providers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -205,7 +220,7 @@ CREATE TABLE domain_providers (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 13. Sessions
+-- 14. Sessions
 -- Persistent express-session store
 CREATE TABLE sessions (
     sid TEXT PRIMARY KEY,
@@ -215,12 +230,14 @@ CREATE TABLE sessions (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 14. Indexes for Performance
+-- 15. Indexes for Performance
 CREATE INDEX idx_restaurants_owner_user_id ON restaurants(owner_user_id);
 CREATE INDEX idx_menus_restaurant_id ON menus(restaurant_id);
 CREATE INDEX idx_menu_categories_menu_id ON menu_categories(menu_id);
 CREATE INDEX idx_dishes_category_id ON dishes(category_id);
 CREATE INDEX idx_opening_hours_restaurant_id ON opening_hours(restaurant_id);
+CREATE INDEX idx_special_closures_restaurant_id ON special_closures(restaurant_id);
+CREATE INDEX idx_special_closures_dates ON special_closures(start_date, end_date);
 CREATE INDEX idx_site_domains_restaurant_id ON site_domains(restaurant_id);
 CREATE INDEX idx_publish_events_restaurant_id ON publish_events(restaurant_id);
 CREATE INDEX idx_plan_change_log_restaurant_id ON plan_change_log(restaurant_id);

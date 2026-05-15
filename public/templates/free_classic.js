@@ -4,7 +4,7 @@
  */
 
 window.free_classic = function(data) {
-    const { restaurant, siteConfig, menu, hours, flags } = data;
+    const { restaurant, siteConfig, menu, hours, specialClosures, flags } = data;
     const { utils } = window.RestiqRenderer;
     const e = utils.escapeHtml;
     const logoUrl = utils.safeUrl(siteConfig.logoUrl);
@@ -22,6 +22,8 @@ window.free_classic = function(data) {
 
             ${utils.donationHint(flags)}
 
+            ${utils.specialClosures(specialClosures)}
+
             <div style="max-width: 700px; margin: 0 auto; padding: 3rem 1rem;">
                 <!-- About Centered -->
                 <section style="text-align: center; margin-bottom: 4rem;">
@@ -38,13 +40,19 @@ window.free_classic = function(data) {
                         <div style="margin-bottom: 4rem;">
                             <h3 style="text-align: center; font-size: 1.8rem; margin-bottom: 2rem; color: var(--accent);">${e(cat.name)}</h3>
                             <div style="border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; padding: 2rem 0;">
-                                ${cat.dishes.map(dish => `
+                                ${cat.dishes.map(dish => {
+                                    const dishImage = utils.safeUrl(dish.image);
+                                    return `
                                     <div style="text-align: center; margin-bottom: 2rem;">
+                                        ${dishImage ? `<img src="${dishImage}" alt="" style="width: 120px; height: 120px; object-fit: cover; border-radius: 999px; margin-bottom: 1rem;">` : ''}
                                         <div style="font-weight: bold; font-size: 1.2rem;">${e(dish.name)}</div>
+                                        ${dish.badge ? `<div style="font-size: 0.8rem; color: var(--accent); text-transform: uppercase; letter-spacing: 1px;">${e(dish.badge)}</div>` : ''}
                                         <div style="font-style: italic; color: #666; margin: 0.5rem 0;">${e(dish.description)}</div>
+                                        ${dish.ingredients ? `<div style="font-size: 0.85rem; color: #666;">Zutaten: ${e(dish.ingredients)}</div>` : ''}
+                                        ${dish.allergens ? `<div style="font-size: 0.85rem; color: #666;">Allergene: ${e(dish.allergens)}</div>` : ''}
                                         <div style="font-weight: 700; color: #000;">${e(dish.price)}€</div>
                                     </div>
-                                `).join('')}
+                                `}).join('')}
                             </div>
                         </div>
                     `).join('')}
