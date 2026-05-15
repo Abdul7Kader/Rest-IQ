@@ -205,7 +205,17 @@ CREATE TABLE domain_providers (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 13. Indexes for Performance
+-- 13. Sessions
+-- Persistent express-session store
+CREATE TABLE sessions (
+    sid TEXT PRIMARY KEY,
+    sess TEXT NOT NULL,
+    expires INTEGER NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 14. Indexes for Performance
 CREATE INDEX idx_restaurants_owner_user_id ON restaurants(owner_user_id);
 CREATE INDEX idx_menus_restaurant_id ON menus(restaurant_id);
 CREATE INDEX idx_menu_categories_menu_id ON menu_categories(menu_id);
@@ -214,3 +224,4 @@ CREATE INDEX idx_opening_hours_restaurant_id ON opening_hours(restaurant_id);
 CREATE INDEX idx_site_domains_restaurant_id ON site_domains(restaurant_id);
 CREATE INDEX idx_publish_events_restaurant_id ON publish_events(restaurant_id);
 CREATE INDEX idx_plan_change_log_restaurant_id ON plan_change_log(restaurant_id);
+CREATE INDEX idx_sessions_expires ON sessions(expires);

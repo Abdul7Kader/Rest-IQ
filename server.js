@@ -4,6 +4,7 @@ const session = require('express-session');
 const path = require('path');
 const db = require('./lib/db');
 const { hashPassword, verifyPassword, isAuthenticated, hasRole } = require('./lib/auth');
+const SQLiteSessionStore = require('./lib/session-store');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -43,10 +44,11 @@ app.use((req, res, next) => {
 });
 app.use(express.static('public'));
 
-// Session setup (In-memory for Dev/V1)
+// Session setup
 app.use(session({
     name: SESSION_COOKIE_NAME,
     secret: SESSION_SECRET,
+    store: new SQLiteSessionStore(db),
     resave: false,
     saveUninitialized: false,
     cookie: {

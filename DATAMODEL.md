@@ -66,8 +66,9 @@ Die Speisekarte ist hierarchisch aufgebaut:
 ## 7. Authentifizierung & Sessions
 
 - **Passwort-Hashing**: Wird über `bcryptjs` mit einem Salt-Faktor von 12 realisiert.
-- **Session-Management**: Nutzt `express-session`. 
-- **Wichtiger Hinweis**: In Schritt 2/Version 1 wird ein **In-Memory-Session-Store** verwendet. Dieser ist ausschließlich für die lokale Entwicklung und Testphasen geeignet. Für den Produktivbetrieb muss dieser gegen einen persistenten Store (z. B. Redis oder PostgreSQL/SQLite-Store) ausgetauscht werden. Die Architektur ist so ausgelegt, dass der Store im `server.js` zentral getauscht werden kann.
+- **Session-Management**: Nutzt `express-session` mit einem persistenten SQLite-Store in der Tabelle `sessions`.
+- **Session-Schutz**: Session-IDs werden nicht im Klartext in der UI angezeigt, Cookies sind `httpOnly`, `sameSite=lax` und in Produktion `secure`. Beim Login und bei der Registrierung wird die Session neu erzeugt, um Session-Fixation zu vermeiden.
+- **Ablauf & Wartung**: Sessions speichern einen Ablaufzeitpunkt (`expires`) und abgelaufene Einträge werden regelmäßig bereinigt. Für sehr hohe Last kann der Store später zentral im `server.js` gegen Redis oder einen anderen produktiven Session-Store getauscht werden.
 
 ## 8. Performance & Wartung
 
