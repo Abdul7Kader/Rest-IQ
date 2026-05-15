@@ -30,8 +30,14 @@
         .hours-grid { display: grid; grid-template-columns: 110px 1fr; gap: 0.75rem 1rem; align-items: center; }
         .hours-row { display: grid; grid-template-columns: auto repeat(4, minmax(92px, 1fr)) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; }
         .menu-cat { border-left: 4px solid var(--primary); background: white; border-radius: 0 8px 8px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 1rem; margin-bottom: 1.25rem; }
+        .category-head { display: grid; grid-template-columns: 96px 1fr auto; gap: 1rem; align-items: center; margin-bottom: 0.75rem; }
         .menu-item { display: grid; grid-template-columns: 72px 1fr auto; gap: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; align-items: start; }
         .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; background: #f1f5f9; border: 1px solid var(--border); }
+        .category-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; background: #f1f5f9; border: 1px solid var(--border); }
+        .upload-zone { border: 2px dashed var(--border); border-radius: 8px; background: #f8fafc; padding: 1rem; display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+        .upload-zone:hover, .upload-zone.drag-over { border-color: var(--primary); background: #eef2ff; }
+        .upload-preview { width: 96px; height: 72px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); background: white; }
+        .upload-copy strong { display: block; margin-bottom: 0.25rem; }
         .muted { color: var(--text-muted); }
         .meta-line { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
@@ -42,7 +48,9 @@
             .main-content { margin-left: 0; padding: 1rem; }
             .hours-grid { grid-template-columns: 1fr; }
             .hours-row { grid-template-columns: 1fr 1fr; }
+            .category-head { grid-template-columns: 1fr; }
             .menu-item { grid-template-columns: 1fr; }
+            .upload-zone { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -168,12 +176,62 @@
                         </div>
                         <div class="form-group"><label>Akzentfarbe</label><input type="color" name="accent_color" style="height: 50px;"></div>
                     </div>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label>Schrift</label>
+                            <select name="font_family">
+                                <option value="system">Klar & modern</option>
+                                <option value="serif">Klassisch</option>
+                                <option value="rounded">Weich & freundlich</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Überschriften</label>
+                            <select name="heading_style">
+                                <option value="clean">Sauber</option>
+                                <option value="editorial">Editorial</option>
+                                <option value="uppercase">Großbuchstaben</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid">
+                        <div class="form-group">
+                            <label>Menü-Darstellung</label>
+                            <select name="menu_layout">
+                                <option value="list">Liste</option>
+                                <option value="cards">Karten</option>
+                                <option value="compact">Kompakt</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Gerichtbilder</label>
+                            <select name="dish_image_style">
+                                <option value="rounded">Abgerundet</option>
+                                <option value="circle">Rund</option>
+                                <option value="square">Eckig</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="form-group"><label>Hero Titel</label><input type="text" name="hero_title" maxlength="180"></div>
                     <div class="form-group"><label>Hero Untertitel</label><input type="text" name="hero_subtitle" maxlength="280"></div>
                     <div class="form-group"><label>Über uns Text</label><textarea name="about_text" rows="5" maxlength="2500"></textarea></div>
                     <div class="grid">
-                        <div class="form-group"><label>Logo URL</label><input type="url" name="logo_image_url"></div>
-                        <div class="form-group"><label>Hero Bild URL</label><input type="url" name="hero_image_url"></div>
+                        <div class="form-group">
+                            <label>Logo</label>
+                            <input type="hidden" name="logo_image_url">
+                            <div class="upload-zone" data-input="logo_image_url" data-context="logo" tabindex="0">
+                                <img class="upload-preview" alt="">
+                                <div class="upload-copy"><strong>Logo ablegen</strong><span class="muted">PNG, JPG, WebP oder GIF bis 4 MB</span></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Hero Bild</label>
+                            <input type="hidden" name="hero_image_url">
+                            <div class="upload-zone" data-input="hero_image_url" data-context="hero" tabindex="0">
+                                <img class="upload-preview" alt="">
+                                <div class="upload-copy"><strong>Hero-Bild ablegen</strong><span class="muted">Breites Bild für den Kopfbereich</span></div>
+                            </div>
+                        </div>
                     </div>
                     <div class="form-group"><label>Footer Notiz</label><input type="text" name="footer_note" maxlength="300"></div>
                     <button type="submit">Design speichern</button>
@@ -243,6 +301,7 @@
 
             restaurantData = await res.json();
             fillForms();
+            setupUploadZones(document);
             await Promise.all([loadStatus(), loadOnboarding(), loadHours(), loadClosures(), loadMenu(), loadHelp()]);
         }
 
@@ -273,6 +332,7 @@
                     else if (restaurantData.config && restaurantData.config[name] !== undefined && restaurantData.config[name] !== null) input.value = restaurantData.config[name];
                 });
             });
+            refreshUploadPreviews();
         }
 
         async function api(path, options = {}) {
@@ -301,15 +361,101 @@
             return escapeHtml(value).replace(/`/g, '&#96;');
         }
 
-        function safeHttpUrl(value) {
+        function safeImageUrl(value) {
             const url = String(value || '').trim();
             if (!url) return '';
             try {
-                const parsed = new URL(url);
+                const parsed = new URL(url, window.location.origin);
                 return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
             } catch (error) {
                 return '';
             }
+        }
+
+        function uploadBox(inputName, value, label, context) {
+            return `
+                <input type="hidden" name="${escapeAttr(inputName)}" value="${escapeAttr(value || '')}">
+                <div class="upload-zone" data-input="${escapeAttr(inputName)}" data-context="${escapeAttr(context)}" tabindex="0">
+                    <img class="upload-preview" alt="">
+                    <div class="upload-copy"><strong>${escapeHtml(label)}</strong><span class="muted">Bild hier ablegen oder klicken</span></div>
+                </div>
+            `;
+        }
+
+        function refreshUploadPreviews(root = document) {
+            root.querySelectorAll('.upload-zone').forEach(zone => {
+                const input = zone.closest('form')?.querySelector(`[name="${zone.dataset.input}"]`);
+                const preview = zone.querySelector('.upload-preview');
+                const src = safeImageUrl(input?.value);
+                if (preview) {
+                    preview.src = src || '';
+                    preview.style.visibility = src ? 'visible' : 'hidden';
+                }
+            });
+        }
+
+        function setupUploadZones(root = document) {
+            root.querySelectorAll('.upload-zone').forEach(zone => {
+                if (zone.dataset.bound === '1') return;
+                zone.dataset.bound = '1';
+                const input = zone.closest('form')?.querySelector(`[name="${zone.dataset.input}"]`);
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = 'image/png,image/jpeg,image/webp,image/gif';
+                fileInput.hidden = true;
+                zone.appendChild(fileInput);
+
+                const handleFile = async (file) => {
+                    if (!file) return;
+                    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+                        showAlert('Bitte nur PNG, JPG, WebP oder GIF hochladen.');
+                        return;
+                    }
+                    if (file.size > 4 * 1024 * 1024) {
+                        showAlert('Das Bild ist zu groß. Maximal 4 MB.');
+                        return;
+                    }
+                    zone.classList.add('drag-over');
+                    try {
+                        const res = await fetch('/api/uploads/image', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': file.type,
+                                'X-Upload-Context': zone.dataset.context || 'image'
+                            },
+                            body: file
+                        });
+                        const data = await res.json().catch(() => ({}));
+                        if (!res.ok) throw new Error(data.error || 'Upload fehlgeschlagen.');
+                        if (input) input.value = data.url;
+                        refreshUploadPreviews(zone.closest('form') || document);
+                    } catch (error) {
+                        showAlert(error.message);
+                    } finally {
+                        zone.classList.remove('drag-over');
+                    }
+                };
+
+                zone.addEventListener('click', () => fileInput.click());
+                zone.addEventListener('keydown', event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        fileInput.click();
+                    }
+                });
+                fileInput.addEventListener('change', event => handleFile(event.target.files[0]));
+                zone.addEventListener('dragover', event => {
+                    event.preventDefault();
+                    zone.classList.add('drag-over');
+                });
+                zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+                zone.addEventListener('drop', event => {
+                    event.preventDefault();
+                    zone.classList.remove('drag-over');
+                    handleFile(event.dataTransfer.files[0]);
+                });
+            });
+            refreshUploadPreviews(root);
         }
 
         function showAlert(message, type = 'error') {
@@ -513,12 +659,15 @@
                 return;
             }
 
-            container.innerHTML = currentMenu.categories.map(cat => `
+            container.innerHTML = currentMenu.categories.map(cat => {
+                const categoryImage = safeImageUrl(cat.image_url);
+                return `
                 <div class="menu-cat">
-                    <div class="section-header" style="margin-bottom: 0.75rem;">
+                    <div class="category-head">
+                        ${categoryImage ? `<img class="category-thumb" src="${escapeAttr(categoryImage)}" alt="">` : '<div class="category-thumb"></div>'}
                         <div>
                             <h3>${escapeHtml(cat.category_name)}</h3>
-                            <p class="muted">${escapeHtml(cat.display_mode)} · Sortierung ${escapeHtml(cat.sort_order)} · ${cat.is_active ? 'aktiv' : 'inaktiv'}</p>
+                            <p class="muted">${escapeHtml(cat.display_mode)} · ${escapeHtml(cat.layout_mode || 'inherit')} · Sortierung ${escapeHtml(cat.sort_order)} · ${cat.is_active ? 'aktiv' : 'inaktiv'}</p>
                         </div>
                         <div class="toolbar">
                             <button class="btn-sm secondary" type="button" onclick="openCategoryModal(${cat.id})">Bearbeiten</button>
@@ -529,11 +678,11 @@
                     </div>
                     ${cat.dishes.length ? cat.dishes.map(renderDish).join('') : '<p class="muted">Keine Gerichte in dieser Kategorie.</p>'}
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         function renderDish(dish) {
-            const image = safeHttpUrl(dish.image_url);
+            const image = safeImageUrl(dish.image_url);
             return `
                 <div class="menu-item">
                     ${image ? `<img class="thumb" src="${escapeAttr(image)}" alt="">` : '<div class="thumb"></div>'}
@@ -561,8 +710,21 @@
                 <form id="categoryForm">
                     <div class="form-group"><label>Name</label><input type="text" name="category_name" required value="${escapeAttr(item.category_name || '')}"></div>
                     <div class="grid">
-                        <div class="form-group"><label>Anzeige</label><select name="display_mode"><option value="vertical" ${item.display_mode !== 'horizontal' ? 'selected' : ''}>Vertikal</option><option value="horizontal" ${item.display_mode === 'horizontal' ? 'selected' : ''}>Horizontal</option></select></div>
+                        <div class="form-group"><label>Ausrichtung</label><select name="display_mode"><option value="vertical" ${item.display_mode === 'vertical' || !item.display_mode ? 'selected' : ''}>Vertikal</option><option value="horizontal" ${item.display_mode === 'horizontal' ? 'selected' : ''}>Horizontal</option></select></div>
                         <div class="form-group"><label>Sortierung</label><input type="number" name="sort_order" value="${escapeAttr(item.sort_order ?? '')}"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Menü-Stil für diese Kategorie</label>
+                        <select name="layout_mode">
+                            <option value="inherit" ${!item.layout_mode || item.layout_mode === 'inherit' ? 'selected' : ''}>Globales Design übernehmen</option>
+                            <option value="list" ${item.layout_mode === 'list' ? 'selected' : ''}>Liste</option>
+                            <option value="cards" ${item.layout_mode === 'cards' ? 'selected' : ''}>Karten</option>
+                            <option value="compact" ${item.layout_mode === 'compact' ? 'selected' : ''}>Kompakt</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Kategoriebild</label>
+                        ${uploadBox('image_url', item.image_url || '', 'Kategoriebild ablegen', 'category')}
                     </div>
                     <label><input type="checkbox" name="is_active" ${!id || item.is_active ? 'checked' : ''}> Aktiv</label>
                     <div class="toolbar" style="margin-top: 1.5rem;">
@@ -571,6 +733,7 @@
                     </div>
                 </form>
             `);
+            setupUploadZones(document.getElementById('modalContent'));
             document.getElementById('categoryForm').addEventListener('submit', event => saveCategory(event, id));
         }
 
@@ -620,7 +783,10 @@
                         <div class="form-group"><label>Badge</label><input type="text" name="badge_text" value="${escapeAttr(dish.badge_text || '')}"></div>
                         <div class="form-group"><label>Sortierung</label><input type="number" name="sort_order" value="${escapeAttr(dish.sort_order ?? '')}"></div>
                     </div>
-                    <div class="form-group"><label>Bild URL</label><input type="url" name="image_url" value="${escapeAttr(dish.image_url || '')}"></div>
+                    <div class="form-group">
+                        <label>Gerichtbild</label>
+                        ${uploadBox('image_url', dish.image_url || '', 'Gerichtbild ablegen', 'dish')}
+                    </div>
                     <label><input type="checkbox" name="is_active" ${!id || dish.is_active ? 'checked' : ''}> Aktiv</label>
                     <div class="toolbar" style="margin-top: 1.5rem;">
                         <button type="submit">Speichern</button>
@@ -628,6 +794,7 @@
                     </div>
                 </form>
             `);
+            setupUploadZones(document.getElementById('modalContent'));
             document.getElementById('dishForm').addEventListener('submit', event => saveDish(event, id, catId));
         }
 

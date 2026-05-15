@@ -74,9 +74,12 @@ cloudflare-export/
     │   └── style.css
     ├── js/
     │   └── renderer.js
-    └── templates/
-        ├── free_default.js
-        └── free_classic.js
+    ├── templates/
+    │   ├── free_default.js
+    │   └── free_classic.js
+    └── uploads/
+        └── restaurants/
+            └── <restaurant_id>/    ← lokal hochgeladene Restaurantbilder
 ```
 
 ---

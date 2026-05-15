@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
+const crypto = require('crypto');
 const db = require('./lib/db');
 const { hashPassword, verifyPassword, isAuthenticated, hasRole } = require('./lib/auth');
 const SQLiteSessionStore = require('./lib/session-store');
@@ -11,6 +13,8 @@ const port = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const SESSION_COOKIE_NAME = 'restiq.sid';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'restiq-fallback-secret';
+const IMAGE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
+const IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
 if (isProduction && SESSION_SECRET === 'restiq-fallback-secret') {
     throw new Error('SESSION_SECRET must be set in production.');
@@ -129,6 +133,20 @@ function normalizeHttpUrl(value) {
     }
 }
 
+function normalizeImageUrl(value) {
+    const url = trimText(value, 1000);
+    if (!url) return null;
+
+    if (url.startsWith('/uploads/restaurants/')) {
+        if (!/^\/uploads\/restaurants\/\d+\/[a-zA-Z0-9._-]+\.(png|jpe?g|webp|gif)$/i.test(url)) {
+            throw new Error('INVALID_IMAGE_URL');
+        }
+        return url;
+    }
+
+    return normalizeHttpUrl(url);
+}
+
 function normalizeCssColor(value) {
     const color = trimText(value, 20);
     if (!color) return null;
@@ -191,6 +209,46 @@ function normalizeDisplayMode(value) {
     return mode;
 }
 
+function normalizeCategoryLayoutMode(value) {
+    const layout = trimText(value, 30) || 'inherit';
+    if (!['inherit', 'list', 'cards', 'compact'].includes(layout)) {
+        throw new Error('INVALID_CATEGORY_LAYOUT');
+    }
+    return layout;
+}
+
+function normalizeFontFamily(value) {
+    const font = trimText(value, 30) || 'system';
+    if (!['system', 'serif', 'rounded'].includes(font)) {
+        throw new Error('INVALID_FONT_FAMILY');
+    }
+    return font;
+}
+
+function normalizeHeadingStyle(value) {
+    const style = trimText(value, 30) || 'clean';
+    if (!['clean', 'editorial', 'uppercase'].includes(style)) {
+        throw new Error('INVALID_HEADING_STYLE');
+    }
+    return style;
+}
+
+function normalizeMenuLayout(value) {
+    const layout = trimText(value, 30) || 'list';
+    if (!['list', 'cards', 'compact'].includes(layout)) {
+        throw new Error('INVALID_MENU_LAYOUT');
+    }
+    return layout;
+}
+
+function normalizeDishImageStyle(value) {
+    const style = trimText(value, 30) || 'rounded';
+    if (!['rounded', 'circle', 'square'].includes(style)) {
+        throw new Error('INVALID_DISH_IMAGE_STYLE');
+    }
+    return style;
+}
+
 function normalizeBooleanFlag(value) {
     return value === false || value === 0 || value === '0' || value === 'false' ? 0 : 1;
 }
@@ -224,6 +282,27 @@ function normalizeHostname(value) {
     return hostname;
 }
 
+function detectImageMime(buffer) {
+    if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+    if (
+        buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+        buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+    ) return 'image/png';
+    if (buffer.slice(0, 4).toString('ascii') === 'RIFF' && buffer.slice(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+    if (buffer.slice(0, 6).toString('ascii') === 'GIF87a' || buffer.slice(0, 6).toString('ascii') === 'GIF89a') return 'image/gif';
+    return null;
+}
+
+function imageExtension(mime) {
+    return {
+        'image/jpeg': 'jpg',
+        'image/png': 'png',
+        'image/webp': 'webp',
+        'image/gif': 'gif'
+    }[mime];
+}
+
 function getOwnerRestaurant(userId) {
     return db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(userId);
 }
@@ -240,6 +319,14 @@ function sendValidationError(res, error) {
         INVALID_INTEGER: 'Invalid numeric value.',
         INVALID_PRICE: 'Invalid price.',
         INVALID_DISPLAY_MODE: 'Invalid display mode.',
+        INVALID_CATEGORY_LAYOUT: 'Invalid category layout.',
+        INVALID_FONT_FAMILY: 'Invalid font selection.',
+        INVALID_HEADING_STYLE: 'Invalid heading style.',
+        INVALID_MENU_LAYOUT: 'Invalid menu layout.',
+        INVALID_DISH_IMAGE_STYLE: 'Invalid image style.',
+        INVALID_IMAGE_URL: 'Invalid image URL.',
+        INVALID_IMAGE_TYPE: 'Only JPEG, PNG, WebP or GIF images are allowed.',
+        IMAGE_TOO_LARGE: 'Image is too large. Maximum size is 4 MB.',
         REQUIRED_TITLE: 'Title is required.',
         REQUIRED_NAME: 'Name is required.',
         REQUIRED_PRICE: 'Price is required.',
@@ -444,6 +531,20 @@ function ensureApplicationTables() {
         CREATE INDEX IF NOT EXISTS idx_special_closures_restaurant_id ON special_closures(restaurant_id);
         CREATE INDEX IF NOT EXISTS idx_special_closures_dates ON special_closures(start_date, end_date);
     `);
+
+    const addColumnIfMissing = (tableName, columnName, definition) => {
+        const columns = db.prepare(`PRAGMA table_info(${tableName})`).all().map(column => column.name);
+        if (!columns.includes(columnName)) {
+            db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+        }
+    };
+
+    addColumnIfMissing('menu_categories', 'image_url', 'TEXT');
+    addColumnIfMissing('menu_categories', 'layout_mode', "TEXT NOT NULL DEFAULT 'inherit'");
+    addColumnIfMissing('site_configs', 'font_family', "TEXT NOT NULL DEFAULT 'system'");
+    addColumnIfMissing('site_configs', 'heading_style', "TEXT NOT NULL DEFAULT 'clean'");
+    addColumnIfMissing('site_configs', 'menu_layout', "TEXT NOT NULL DEFAULT 'list'");
+    addColumnIfMissing('site_configs', 'dish_image_style', "TEXT NOT NULL DEFAULT 'rounded'");
 }
 
 // --- Auth Routes ---
@@ -543,7 +644,8 @@ app.get('/api/restaurant', isAuthenticated, (req, res) => {
         SELECT r.*, s.current_plan, s.template_key, s.ads_enabled, s.donation_hint_enabled,
                s.is_published, s.primary_language, s.accent_color, s.hero_title,
                s.hero_subtitle, s.about_text, s.logo_image_url, s.hero_image_url,
-               s.footer_note, s.seo_title, s.seo_description
+               s.footer_note, s.seo_title, s.seo_description, s.font_family,
+               s.heading_style, s.menu_layout, s.dish_image_style
         FROM restaurants r
         JOIN site_configs s ON r.id = s.restaurant_id
         WHERE r.owner_user_id = ?
@@ -568,7 +670,11 @@ app.get('/api/restaurant', isAuthenticated, (req, res) => {
         hero_image_url: restaurant.hero_image_url,
         footer_note: restaurant.footer_note,
         seo_title: restaurant.seo_title,
-        seo_description: restaurant.seo_description
+        seo_description: restaurant.seo_description,
+        font_family: restaurant.font_family,
+        heading_style: restaurant.heading_style,
+        menu_layout: restaurant.menu_layout,
+        dish_image_style: restaurant.dish_image_style
     };
 
     res.json(restaurant);
@@ -771,12 +877,16 @@ app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), (req,
         hero_title: value => trimText(value, 180),
         hero_subtitle: value => trimText(value, 280),
         about_text: value => trimText(value, 2500),
-        logo_image_url: normalizeHttpUrl,
-        hero_image_url: normalizeHttpUrl,
+        logo_image_url: normalizeImageUrl,
+        hero_image_url: normalizeImageUrl,
         footer_note: value => trimText(value, 300),
         accent_color: normalizeCssColor,
         primary_language: value => trimText(value, 10) || 'de',
-        template_key: normalizeTemplateKey
+        template_key: normalizeTemplateKey,
+        font_family: normalizeFontFamily,
+        heading_style: normalizeHeadingStyle,
+        menu_layout: normalizeMenuLayout,
+        dish_image_style: normalizeDishImageStyle
     };
 
     const updates = [];
@@ -826,6 +936,46 @@ app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), (req,
         res.status(500).json({ error: 'Update failed.' });
     }
 });
+
+app.post(
+    '/api/uploads/image',
+    isAuthenticated,
+    hasRole('restaurant_owner'),
+    express.raw({ type: IMAGE_UPLOAD_TYPES, limit: IMAGE_UPLOAD_MAX_BYTES }),
+    (req, res) => {
+        const restaurant = getOwnerRestaurant(req.session.userId);
+        if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+        const body = req.body;
+        if (!Buffer.isBuffer(body) || body.length === 0) {
+            return res.status(400).json({ error: 'No image received.' });
+        }
+        if (body.length > IMAGE_UPLOAD_MAX_BYTES) {
+            return sendValidationError(res, new Error('IMAGE_TOO_LARGE'));
+        }
+
+        const detectedMime = detectImageMime(body);
+        if (!detectedMime || !IMAGE_UPLOAD_TYPES.includes(detectedMime)) {
+            return sendValidationError(res, new Error('INVALID_IMAGE_TYPE'));
+        }
+
+        const extension = imageExtension(detectedMime);
+        const uploadDir = path.join(__dirname, 'public', 'uploads', 'restaurants', String(restaurant.id));
+        fs.mkdirSync(uploadDir, { recursive: true });
+
+        const safeContext = slugify(req.get('X-Upload-Context') || 'image').slice(0, 32) || 'image';
+        const fileName = `${Date.now()}-${safeContext}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
+        const targetPath = path.join(uploadDir, fileName);
+        fs.writeFileSync(targetPath, body, { flag: 'wx' });
+
+        res.json({
+            success: true,
+            url: `/uploads/restaurants/${restaurant.id}/${fileName}`,
+            mime: detectedMime,
+            size: body.length
+        });
+    }
+);
 
 // --- Opening Hours ---
 
@@ -1051,11 +1201,15 @@ app.post('/api/menu/categories', isAuthenticated, hasRole('restaurant_owner'), (
 
     let categoryName;
     let displayMode;
+    let layoutMode;
     let sortOrder;
+    let imageUrl;
     try {
         categoryName = trimText(req.body.category_name, 120);
         if (!categoryName) throw new Error('REQUIRED_NAME');
         displayMode = normalizeDisplayMode(req.body.display_mode);
+        layoutMode = normalizeCategoryLayoutMode(req.body.layout_mode);
+        imageUrl = normalizeImageUrl(req.body.image_url);
         sortOrder = req.body.sort_order === undefined || req.body.sort_order === ''
             ? getNextCategorySort(menu_id)
             : normalizeInteger(req.body.sort_order);
@@ -1064,7 +1218,7 @@ app.post('/api/menu/categories', isAuthenticated, hasRole('restaurant_owner'), (
     }
 
     try {
-        const info = db.prepare('INSERT INTO menu_categories (menu_id, category_name, display_mode, sort_order) VALUES (?, ?, ?, ?)').run(menu_id, categoryName, displayMode, sortOrder);
+        const info = db.prepare('INSERT INTO menu_categories (menu_id, category_name, display_mode, layout_mode, sort_order, image_url) VALUES (?, ?, ?, ?, ?, ?)').run(menu_id, categoryName, displayMode, layoutMode, sortOrder, imageUrl);
         res.json({ success: true, id: info.lastInsertRowid });
     } catch (e) {
         res.status(500).json({ error: 'Failed to add category.' });
@@ -1086,6 +1240,14 @@ app.patch('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner
         if (req.body.display_mode !== undefined) {
             fields.push('display_mode = ?');
             values.push(normalizeDisplayMode(req.body.display_mode));
+        }
+        if (req.body.layout_mode !== undefined) {
+            fields.push('layout_mode = ?');
+            values.push(normalizeCategoryLayoutMode(req.body.layout_mode));
+        }
+        if (req.body.image_url !== undefined) {
+            fields.push('image_url = ?');
+            values.push(normalizeImageUrl(req.body.image_url));
         }
         if (req.body.sort_order !== undefined) {
             fields.push('sort_order = ?');
@@ -1129,7 +1291,7 @@ app.post('/api/dishes', isAuthenticated, hasRole('restaurant_owner'), (req, res)
             sort_order: req.body.sort_order === undefined || req.body.sort_order === ''
                 ? getNextDishSort(category_id)
                 : normalizeInteger(req.body.sort_order),
-            image_url: normalizeHttpUrl(req.body.image_url),
+            image_url: normalizeImageUrl(req.body.image_url),
             badge_text: normalizeNullableText(req.body.badge_text, 80)
         };
     } catch (error) {
@@ -1172,7 +1334,7 @@ app.patch('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req,
             allergens_text: value => trimText(value, 1200),
             sort_order: normalizeInteger,
             is_active: normalizeBooleanFlag,
-            image_url: normalizeHttpUrl,
+            image_url: normalizeImageUrl,
             badge_text: value => normalizeNullableText(value, 80)
         };
 
@@ -1263,7 +1425,11 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
             footerNote: c.footer_note,
             accentColor: c.accent_color || '#2563eb',
             language: c.primary_language || 'de',
-            plan: c.current_plan
+            plan: c.current_plan,
+            fontFamily: c.font_family || 'system',
+            headingStyle: c.heading_style || 'clean',
+            menuLayout: c.menu_layout || 'list',
+            dishImageStyle: c.dish_image_style || 'rounded'
         },
         hours: hours.map(h => ({
             day: h.weekday,
@@ -1284,7 +1450,8 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
             title: menu ? menu.title : 'Speisekarte',
             categories: categories.map(cat => ({
                 name: cat.category_name,
-                mode: cat.display_mode,
+                mode: cat.layout_mode && cat.layout_mode !== 'inherit' ? cat.layout_mode : cat.display_mode,
+                image: cat.image_url,
                 dishes: cat.dishes.map(d => ({
                     name: d.dish_name,
                     price: (d.price_cents / 100).toFixed(2),

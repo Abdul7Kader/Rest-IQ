@@ -15,13 +15,15 @@ const Renderer = {
         
         // 1. Update global styles (accent color)
         document.documentElement.style.setProperty('--accent', Renderer.utils.safeCssColor(siteConfig.accentColor));
+        document.documentElement.style.setProperty('--restiq-font', Renderer.utils.fontStack(siteConfig.fontFamily));
 
         // 2. Clear container
         container.innerHTML = '';
 
         // 3. Render Template Shell
         const shell = document.createElement('div');
-        shell.className = `gastro-shell template-${templateKey}`;
+        shell.className = `gastro-shell template-${templateKey} font-${Renderer.utils.cssToken(siteConfig.fontFamily)} heading-${Renderer.utils.cssToken(siteConfig.headingStyle)} menu-${Renderer.utils.cssToken(siteConfig.menuLayout)}`;
+        shell.style.fontFamily = 'var(--restiq-font)';
         
         // 4. Invoke Template-specific Rendering
         if (typeof window[templateKey] === 'function') {
@@ -67,6 +69,33 @@ const Renderer = {
         safeCssColor(value, fallback = '#2563eb') {
             const color = String(value || '').trim();
             return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(color) ? color : fallback;
+        },
+        cssToken(value) {
+            return String(value || '').replace(/[^a-z0-9_-]/gi, '') || 'default';
+        },
+        fontStack(value) {
+            const stacks = {
+                serif: "Georgia, 'Times New Roman', serif",
+                rounded: "'Trebuchet MS', 'Segoe UI', sans-serif",
+                system: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+            };
+            return stacks[value] || stacks.system;
+        },
+        headingStyle(value) {
+            const styles = {
+                editorial: 'font-family: Georgia, serif; font-weight: 700;',
+                uppercase: 'text-transform: uppercase; letter-spacing: 1px;',
+                clean: ''
+            };
+            return styles[value] || styles.clean;
+        },
+        dishImageRadius(value) {
+            const radii = {
+                circle: '999px',
+                square: '0',
+                rounded: '8px'
+            };
+            return radii[value] || radii.rounded;
         },
         imageStyle(url) {
             const safe = this.safeUrl(url);

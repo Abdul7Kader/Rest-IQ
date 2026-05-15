@@ -58,9 +58,19 @@ Die Speisekarte ist hierarchisch aufgebaut:
 - `menus` -> `menu_categories` -> `dishes`.
 - **Preise**: Werden als `INTEGER` in **Cents** gespeichert (`price_cents`), um Rundungsfehler durch Floating-Point-Arithmetik oder fehlerhafte Dezimal-Implemenierungen zu vermeiden.
 - **Zutaten & Allergene**: Diese Informationen werden in getrennten Textfeldern gespeichert (`ingredients_text`, `allergens_text`), um spätere Filterfunktionen oder spezialisierte Darstellungen (Icons) zu ermöglichen.
-- **Display Modes**: Kategorien unterstützen bereits jetzt die Modi `vertical` (Standard) und `horizontal` (Premium-Layout), um die fachliche Unterscheidung in den Templates vorzubereiten.
+- **Kategorie-Bilder**: `menu_categories.image_url` speichert eine validierte interne Upload-URL oder eine erlaubte externe `http/https`-URL.
+- **Gericht-Bilder**: `dishes.image_url` bleibt das zentrale Bildfeld für Gerichte. Bilder werden über den Owner-Upload als Datei gespeichert; in der Datenbank wird nur die resultierende URL abgelegt.
+- **Display Modes**: Kategorien unterstützen die Ausrichtung `vertical` und `horizontal`.
+- **Layout Modes**: `menu_categories.layout_mode` kann pro Kategorie `inherit`, `list`, `cards` oder `compact` setzen. `inherit` übernimmt die globale Menü-Darstellung aus `site_configs.menu_layout`.
 
-## 5.1 Öffnungszeiten & Sonderschließungen
+## 5.1 Design & Uploads
+
+- **Upload-Sicherheit**: Restaurantbilder werden über `/api/uploads/image` angenommen. Erlaubt sind JPEG, PNG, WebP und GIF bis 4 MB. Der Server prüft Dateisignaturen und verlässt sich nicht nur auf den Browser-MIME-Type.
+- **Speicherort**: Uploads liegen unter `public/uploads/restaurants/<restaurant_id>/...` und verwenden zufällige Dateinamen. Owner erhalten nur Zugriff auf den eigenen Upload-Endpunkt.
+- **Designsteuerung**: `site_configs` enthält zusätzliche Owner-Optionen für `font_family`, `heading_style`, `menu_layout` und `dish_image_style`.
+- **Export**: Interne Upload-Bilder werden beim Cloudflare-Export in den statischen Exportordner kopiert, damit Preview und späterer Pages-Export dieselben Bilddaten nutzen.
+
+## 5.2 Öffnungszeiten & Sonderschließungen
 
 - **Reguläre Öffnungszeiten**: `opening_hours` speichert pro Wochentag bis zu zwei Zeitfenster plus Notiz.
 - **Sonderschließungen**: `special_closures` speichert Urlaubszeiten, Feiertage oder temporäre Schließungen mit Startdatum, Enddatum, Titel, Hinweis und Aktivstatus.

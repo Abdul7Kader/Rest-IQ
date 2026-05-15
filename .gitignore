@@ -16,8 +16,11 @@ package-lock.json
 .vscode/
 .idea/
 
-# Generated Exports (lokaler Publish & Cloudflare Pages Vorbereitung)
-# Diese Verzeichnisse werden durch die Publish-Funktion generiert
+# Generated Exports (interner Export & Cloudflare Pages Vorbereitung)
+# Diese Verzeichnisse werden durch den Deploy-Flow generiert
 # und sollen nicht im Repository landen.
 publish/
 cloudflare-export/
+
+# Owner image uploads
+public/uploads/
