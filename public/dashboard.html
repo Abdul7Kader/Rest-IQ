@@ -30,8 +30,13 @@
         .hours-grid { display: grid; grid-template-columns: 110px 1fr; gap: 0.75rem 1rem; align-items: center; }
         .hours-row { display: grid; grid-template-columns: auto repeat(4, minmax(92px, 1fr)) minmax(140px, 1.2fr); gap: 0.5rem; align-items: center; }
         .menu-cat { border-left: 4px solid var(--primary); background: white; border-radius: 0 8px 8px 0; border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 1rem; margin-bottom: 1.25rem; }
-        .category-head { display: grid; grid-template-columns: 96px 1fr auto; gap: 1rem; align-items: center; margin-bottom: 0.75rem; }
-        .menu-item { display: grid; grid-template-columns: 72px 1fr auto; gap: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; align-items: start; }
+        .category-head { display: grid; grid-template-columns: 32px 96px 1fr auto; gap: 1rem; align-items: center; margin-bottom: 0.75rem; }
+        .dish-list { display: grid; gap: 0; }
+        .menu-item { display: grid; grid-template-columns: 32px 72px 1fr auto; gap: 1rem; border-top: 1px solid var(--border); padding-top: 1rem; margin-top: 1rem; align-items: start; }
+        .drag-handle { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border); border-radius: 4px; background: #f8fafc; color: var(--text-muted); cursor: grab; user-select: none; }
+        .drag-handle:active { cursor: grabbing; }
+        .menu-cat.dragging, .menu-item.dragging { opacity: 0.45; }
+        .menu-cat.drag-over, .menu-item.drag-over { outline: 2px solid var(--primary); outline-offset: 2px; }
         .thumb { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; background: #f1f5f9; border: 1px solid var(--border); }
         .category-thumb { width: 96px; height: 72px; object-fit: cover; border-radius: 8px; background: #f1f5f9; border: 1px solid var(--border); }
         .upload-zone { border: 2px dashed var(--border); border-radius: 8px; background: #f8fafc; padding: 1rem; display: grid; grid-template-columns: 96px 1fr; gap: 1rem; align-items: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; }
@@ -48,7 +53,7 @@
             .main-content { margin-left: 0; padding: 1rem; }
             .hours-grid { grid-template-columns: 1fr; }
             .hours-row { grid-template-columns: 1fr 1fr; }
-            .category-head { grid-template-columns: 1fr; }
+            .category-head { grid-template-columns: 32px 1fr; }
             .menu-item { grid-template-columns: 1fr; }
             .upload-zone { grid-template-columns: 1fr; }
         }
@@ -662,8 +667,9 @@
             container.innerHTML = currentMenu.categories.map(cat => {
                 const categoryImage = safeImageUrl(cat.image_url);
                 return `
-                <div class="menu-cat">
+                <div class="menu-cat" data-category-id="${cat.id}" draggable="true">
                     <div class="category-head">
+                        <span class="drag-handle" title="Kategorie ziehen" aria-label="Kategorie ziehen">≡</span>
                         ${categoryImage ? `<img class="category-thumb" src="${escapeAttr(categoryImage)}" alt="">` : '<div class="category-thumb"></div>'}
                         <div>
                             <h3>${escapeHtml(cat.category_name)}</h3>
@@ -676,15 +682,19 @@
                             <button class="btn-sm btn-danger" type="button" onclick="deleteCategory(${cat.id})">Löschen</button>
                         </div>
                     </div>
-                    ${cat.dishes.length ? cat.dishes.map(renderDish).join('') : '<p class="muted">Keine Gerichte in dieser Kategorie.</p>'}
+                    <div class="dish-list" data-category-id="${cat.id}">
+                        ${cat.dishes.length ? cat.dishes.map(dish => renderDish(dish, cat.id)).join('') : '<p class="muted">Keine Gerichte in dieser Kategorie.</p>'}
+                    </div>
                 </div>
             `}).join('');
+            setupMenuDragAndDrop();
         }
 
-        function renderDish(dish) {
+        function renderDish(dish, categoryId) {
             const image = safeImageUrl(dish.image_url);
             return `
-                <div class="menu-item">
+                <div class="menu-item" data-dish-id="${dish.id}" data-category-id="${categoryId}" draggable="true">
+                    <span class="drag-handle" title="Gericht ziehen" aria-label="Gericht ziehen">≡</span>
                     ${image ? `<img class="thumb" src="${escapeAttr(image)}" alt="">` : '<div class="thumb"></div>'}
                     <div>
                         <strong>${escapeHtml(dish.dish_name)} · ${(dish.price_cents / 100).toFixed(2)}€</strong>
@@ -701,6 +711,116 @@
                     </div>
                 </div>
             `;
+        }
+
+        let menuDragState = null;
+
+        function insertByPointer(container, dragged, target, y) {
+            if (!target || target === dragged || target.parentElement !== container) return;
+            const rect = target.getBoundingClientRect();
+            const before = y < rect.top + rect.height / 2;
+            container.insertBefore(dragged, before ? target : target.nextSibling);
+        }
+
+        async function saveCategoryOrder() {
+            const orderedIds = Array.from(document.querySelectorAll('#menuStructure > .menu-cat'))
+                .map(item => Number(item.dataset.categoryId));
+            await api('/api/menu/categories/reorder', {
+                method: 'POST',
+                body: JSON.stringify({ menu_id: currentMenu.id, ordered_ids: orderedIds })
+            });
+        }
+
+        async function saveDishOrder(categoryId) {
+            const list = document.querySelector(`.dish-list[data-category-id="${categoryId}"]`);
+            const orderedIds = Array.from(list.querySelectorAll('.menu-item'))
+                .map(item => Number(item.dataset.dishId));
+            await api('/api/dishes/reorder', {
+                method: 'POST',
+                body: JSON.stringify({ category_id: Number(categoryId), ordered_ids: orderedIds })
+            });
+        }
+
+        function setupMenuDragAndDrop() {
+            const menuContainer = document.getElementById('menuStructure');
+
+            menuContainer.querySelectorAll('.menu-cat').forEach(categoryEl => {
+                categoryEl.addEventListener('dragstart', event => {
+                    if (event.target.closest('.menu-item')) return;
+                    menuDragState = { type: 'category', id: categoryEl.dataset.categoryId };
+                    categoryEl.classList.add('dragging');
+                    event.dataTransfer.effectAllowed = 'move';
+                });
+
+                categoryEl.addEventListener('dragover', event => {
+                    if (!menuDragState || menuDragState.type !== 'category') return;
+                    event.preventDefault();
+                    const dragged = menuContainer.querySelector(`.menu-cat[data-category-id="${menuDragState.id}"]`);
+                    insertByPointer(menuContainer, dragged, categoryEl, event.clientY);
+                });
+
+                categoryEl.addEventListener('drop', async event => {
+                    if (!menuDragState || menuDragState.type !== 'category') return;
+                    event.preventDefault();
+                    try {
+                        await saveCategoryOrder();
+                        showSuccess();
+                        await loadMenu();
+                    } catch (error) {
+                        showAlert(error.message);
+                        await loadMenu();
+                    }
+                });
+
+                categoryEl.addEventListener('dragend', () => {
+                    categoryEl.classList.remove('dragging');
+                    menuDragState = null;
+                });
+            });
+
+            menuContainer.querySelectorAll('.menu-item').forEach(dishEl => {
+                dishEl.addEventListener('dragstart', event => {
+                    event.stopPropagation();
+                    menuDragState = {
+                        type: 'dish',
+                        id: dishEl.dataset.dishId,
+                        categoryId: dishEl.dataset.categoryId
+                    };
+                    dishEl.classList.add('dragging');
+                    event.dataTransfer.effectAllowed = 'move';
+                });
+
+                dishEl.addEventListener('dragend', event => {
+                    event.stopPropagation();
+                    dishEl.classList.remove('dragging');
+                    menuDragState = null;
+                });
+            });
+
+            menuContainer.querySelectorAll('.dish-list').forEach(list => {
+                list.addEventListener('dragover', event => {
+                    if (!menuDragState || menuDragState.type !== 'dish' || menuDragState.categoryId !== list.dataset.categoryId) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    const dragged = list.querySelector(`.menu-item[data-dish-id="${menuDragState.id}"]`);
+                    const target = event.target.closest('.menu-item');
+                    if (target) insertByPointer(list, dragged, target, event.clientY);
+                });
+
+                list.addEventListener('drop', async event => {
+                    if (!menuDragState || menuDragState.type !== 'dish' || menuDragState.categoryId !== list.dataset.categoryId) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    try {
+                        await saveDishOrder(list.dataset.categoryId);
+                        showSuccess();
+                        await loadMenu();
+                    } catch (error) {
+                        showAlert(error.message);
+                        await loadMenu();
+                    }
+                });
+            });
         }
 
         function openCategoryModal(id = null) {

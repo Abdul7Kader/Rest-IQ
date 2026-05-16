@@ -193,6 +193,17 @@ function normalizeInteger(value, fallback = 0) {
     return number;
 }
 
+function normalizeIdList(value) {
+    if (!Array.isArray(value) || value.length === 0 || value.length > 500) {
+        throw new Error('INVALID_ORDER');
+    }
+    const ids = value.map(item => normalizeInteger(item));
+    if (ids.some(id => id <= 0) || new Set(ids).size !== ids.length) {
+        throw new Error('INVALID_ORDER');
+    }
+    return ids;
+}
+
 function normalizePriceCents(value) {
     const number = Number(value);
     if (!Number.isInteger(number) || number < 0 || number > 999999) {
@@ -317,6 +328,7 @@ function sendValidationError(res, error) {
         INVALID_DATE: 'Invalid date format. Use YYYY-MM-DD.',
         INVALID_DATE_RANGE: 'End date must be on or after start date.',
         INVALID_INTEGER: 'Invalid numeric value.',
+        INVALID_ORDER: 'Invalid sort order.',
         INVALID_PRICE: 'Invalid price.',
         INVALID_DISPLAY_MODE: 'Invalid display mode.',
         INVALID_CATEGORY_LAYOUT: 'Invalid category layout.',
@@ -1192,6 +1204,12 @@ function getNextDishSort(categoryId) {
     return row.nextSort;
 }
 
+function sameIdSet(left, right) {
+    if (left.length !== right.length) return false;
+    const rightSet = new Set(right);
+    return left.every(id => rightSet.has(id));
+}
+
 app.post('/api/menu/categories', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const { menu_id } = req.body;
     
@@ -1223,6 +1241,38 @@ app.post('/api/menu/categories', isAuthenticated, hasRole('restaurant_owner'), (
     } catch (e) {
         res.status(500).json({ error: 'Failed to add category.' });
     }
+});
+
+app.post('/api/menu/categories/reorder', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    let menuId;
+    let orderedIds;
+    try {
+        menuId = normalizeInteger(req.body.menu_id);
+        orderedIds = normalizeIdList(req.body.ordered_ids);
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    const menu = db.prepare(`
+        SELECT m.id
+        FROM menus m
+        JOIN restaurants r ON m.restaurant_id = r.id
+        WHERE m.id = ? AND r.owner_user_id = ?
+    `).get(menuId, req.session.userId);
+    if (!menu) return res.status(403).json({ error: 'Forbidden' });
+
+    const existingIds = db.prepare('SELECT id FROM menu_categories WHERE menu_id = ? ORDER BY sort_order ASC, id ASC').all(menuId).map(row => row.id);
+    if (!sameIdSet(orderedIds, existingIds)) {
+        return res.status(400).json({ error: 'Sort order does not match this menu.' });
+    }
+
+    const update = db.prepare('UPDATE menu_categories SET sort_order = ? WHERE id = ? AND menu_id = ?');
+    db.transaction(() => {
+        orderedIds.forEach((id, index) => update.run(index + 10000, id, menuId));
+        orderedIds.forEach((id, index) => update.run(index, id, menuId));
+    })();
+
+    res.json({ success: true });
 });
 
 app.patch('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
@@ -1351,6 +1401,34 @@ app.patch('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req,
     if (sets.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     values.push(req.params.id);
     db.prepare(`UPDATE dishes SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    res.json({ success: true });
+});
+
+app.post('/api/dishes/reorder', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    let categoryId;
+    let orderedIds;
+    try {
+        categoryId = normalizeInteger(req.body.category_id);
+        orderedIds = normalizeIdList(req.body.ordered_ids);
+    } catch (error) {
+        return sendValidationError(res, error);
+    }
+
+    if (!checkCategoryOwnership(req.session.userId, categoryId)) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const existingIds = db.prepare('SELECT id FROM dishes WHERE category_id = ? ORDER BY sort_order ASC, id ASC').all(categoryId).map(row => row.id);
+    if (!sameIdSet(orderedIds, existingIds)) {
+        return res.status(400).json({ error: 'Sort order does not match this category.' });
+    }
+
+    const update = db.prepare('UPDATE dishes SET sort_order = ? WHERE id = ? AND category_id = ?');
+    db.transaction(() => {
+        orderedIds.forEach((id, index) => update.run(index + 10000, id, categoryId));
+        orderedIds.forEach((id, index) => update.run(index, id, categoryId));
+    })();
+
     res.json({ success: true });
 });
 

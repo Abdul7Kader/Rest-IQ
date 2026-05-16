@@ -62,6 +62,7 @@ Die Speisekarte ist hierarchisch aufgebaut:
 - **Gericht-Bilder**: `dishes.image_url` bleibt das zentrale Bildfeld für Gerichte. Bilder werden über den Owner-Upload als Datei gespeichert; in der Datenbank wird nur die resultierende URL abgelegt.
 - **Display Modes**: Kategorien unterstützen die Ausrichtung `vertical` und `horizontal`.
 - **Layout Modes**: `menu_categories.layout_mode` kann pro Kategorie `inherit`, `list`, `cards` oder `compact` setzen. `inherit` übernimmt die globale Menü-Darstellung aus `site_configs.menu_layout`.
+- **Drag-and-Drop-Sortierung**: Kategorien und Gerichte werden weiter über `sort_order` persistiert. Die Owner-Oberfläche speichert neue Reihenfolgen über dedizierte Reorder-APIs, die Restaurant-Eigentum und vollständige ID-Sets prüfen.
 
 ## 5.1 Design & Uploads
 
