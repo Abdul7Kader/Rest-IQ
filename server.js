@@ -542,6 +542,21 @@ function ensureApplicationTables() {
         );
         CREATE INDEX IF NOT EXISTS idx_special_closures_restaurant_id ON special_closures(restaurant_id);
         CREATE INDEX IF NOT EXISTS idx_special_closures_dates ON special_closures(start_date, end_date);
+        CREATE TABLE IF NOT EXISTS media_assets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            restaurant_id INTEGER NOT NULL,
+            url TEXT NOT NULL UNIQUE,
+            original_name TEXT,
+            context TEXT NOT NULL DEFAULT 'image',
+            mime_type TEXT NOT NULL,
+            size_bytes INTEGER NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_media_assets_restaurant_id ON media_assets(restaurant_id);
+        CREATE INDEX IF NOT EXISTS idx_media_assets_active ON media_assets(is_active, created_at);
     `);
 
     const addColumnIfMissing = (tableName, columnName, definition) => {
@@ -979,15 +994,80 @@ app.post(
         const fileName = `${Date.now()}-${safeContext}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
         const targetPath = path.join(uploadDir, fileName);
         fs.writeFileSync(targetPath, body, { flag: 'wx' });
+        const url = `/uploads/restaurants/${restaurant.id}/${fileName}`;
+        const originalName = trimText(req.get('X-Upload-Name') || '', 180) || null;
+        const mediaInfo = db.prepare(`
+            INSERT INTO media_assets (restaurant_id, url, original_name, context, mime_type, size_bytes)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(restaurant.id, url, originalName, safeContext, detectedMime, body.length);
 
         res.json({
             success: true,
-            url: `/uploads/restaurants/${restaurant.id}/${fileName}`,
+            id: mediaInfo.lastInsertRowid,
+            url,
             mime: detectedMime,
             size: body.length
         });
     }
 );
+
+app.get('/api/media-assets', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const assets = db.prepare(`
+        SELECT id, url, original_name, context, mime_type, size_bytes, created_at
+        FROM media_assets
+        WHERE restaurant_id = ? AND is_active = 1
+        ORDER BY created_at DESC, id DESC
+        LIMIT 200
+    `).all(restaurant.id);
+    res.json(assets);
+});
+
+app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+    const restaurant = getOwnerRestaurant(req.session.userId);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const asset = db.prepare(`
+        SELECT id, url
+        FROM media_assets
+        WHERE id = ? AND restaurant_id = ? AND is_active = 1
+    `).get(req.params.id, restaurant.id);
+    if (!asset) return res.status(404).json({ error: 'Image not found.' });
+
+    const isUsed = Boolean(
+        db.prepare('SELECT 1 FROM site_configs WHERE restaurant_id = ? AND (logo_image_url = ? OR hero_image_url = ?)').get(restaurant.id, asset.url, asset.url) ||
+        db.prepare(`
+            SELECT 1
+            FROM menu_categories mc
+            JOIN menus m ON mc.menu_id = m.id
+            WHERE m.restaurant_id = ? AND mc.image_url = ?
+        `).get(restaurant.id, asset.url) ||
+        db.prepare(`
+            SELECT 1
+            FROM dishes d
+            JOIN menu_categories mc ON d.category_id = mc.id
+            JOIN menus m ON mc.menu_id = m.id
+            WHERE m.restaurant_id = ? AND d.image_url = ?
+        `).get(restaurant.id, asset.url)
+    );
+    if (isUsed) {
+        return res.status(409).json({ error: 'Image is still used by this restaurant.' });
+    }
+
+    db.prepare('UPDATE media_assets SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND restaurant_id = ?').run(asset.id, restaurant.id);
+
+    const relativePath = asset.url.replace(/^\/+/, '');
+    if (relativePath.startsWith(`uploads/restaurants/${restaurant.id}/`) && !relativePath.includes('..')) {
+        const filePath = path.join(__dirname, 'public', relativePath);
+        if (fs.existsSync(filePath)) {
+            fs.rmSync(filePath, { force: true });
+        }
+    }
+
+    res.json({ success: true });
+});
 
 // --- Opening Hours ---
 

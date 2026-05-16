@@ -236,7 +236,23 @@ CREATE TABLE sessions (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 15. Indexes for Performance
+-- 15. Media Assets
+-- Owner-uploaded restaurant images
+CREATE TABLE media_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    restaurant_id INTEGER NOT NULL,
+    url TEXT UNIQUE NOT NULL,
+    original_name TEXT,
+    context TEXT NOT NULL DEFAULT 'image',
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
+);
+
+-- 16. Indexes for Performance
 CREATE INDEX idx_restaurants_owner_user_id ON restaurants(owner_user_id);
 CREATE INDEX idx_menus_restaurant_id ON menus(restaurant_id);
 CREATE INDEX idx_menu_categories_menu_id ON menu_categories(menu_id);
@@ -248,3 +264,5 @@ CREATE INDEX idx_site_domains_restaurant_id ON site_domains(restaurant_id);
 CREATE INDEX idx_publish_events_restaurant_id ON publish_events(restaurant_id);
 CREATE INDEX idx_plan_change_log_restaurant_id ON plan_change_log(restaurant_id);
 CREATE INDEX idx_sessions_expires ON sessions(expires);
+CREATE INDEX idx_media_assets_restaurant_id ON media_assets(restaurant_id);
+CREATE INDEX idx_media_assets_active ON media_assets(is_active, created_at);

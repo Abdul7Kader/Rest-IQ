@@ -68,6 +68,8 @@ Die Speisekarte ist hierarchisch aufgebaut:
 
 - **Upload-Sicherheit**: Restaurantbilder werden über `/api/uploads/image` angenommen. Erlaubt sind JPEG, PNG, WebP und GIF bis 4 MB. Der Server prüft Dateisignaturen und verlässt sich nicht nur auf den Browser-MIME-Type.
 - **Speicherort**: Uploads liegen unter `public/uploads/restaurants/<restaurant_id>/...` und verwenden zufällige Dateinamen. Owner erhalten nur Zugriff auf den eigenen Upload-Endpunkt.
+- **Mediathek**: `media_assets` katalogisiert hochgeladene Bilder mit Restaurantbezug, URL, Kontext, MIME-Type und Dateigröße. Owner sehen und verwalten nur die eigene Mediathek.
+- **Löschen**: Bilder können nur gelöscht werden, wenn sie nicht mehr als Logo, Hero-, Kategorie- oder Gerichtbild verwendet werden.
 - **Designsteuerung**: `site_configs` enthält zusätzliche Owner-Optionen für `font_family`, `heading_style`, `menu_layout` und `dish_image_style`.
 - **Export**: Interne Upload-Bilder werden beim Cloudflare-Export in den statischen Exportordner kopiert, damit Preview und späterer Pages-Export dieselben Bilddaten nutzen.
 

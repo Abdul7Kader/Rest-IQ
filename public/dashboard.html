@@ -43,6 +43,13 @@
         .upload-zone:hover, .upload-zone.drag-over { border-color: var(--primary); background: #eef2ff; }
         .upload-preview { width: 96px; height: 72px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); background: white; }
         .upload-copy strong { display: block; margin-bottom: 0.25rem; }
+        .media-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; }
+        .media-tile { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: white; }
+        .media-tile img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: #f1f5f9; }
+        .media-tile-body { padding: 0.75rem; display: grid; gap: 0.5rem; }
+        .media-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+        .media-picker-button { border: 1px solid var(--border); background: white; border-radius: 8px; padding: 0; overflow: hidden; cursor: pointer; text-align: left; }
+        .media-picker-button img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
         .muted { color: var(--text-muted); }
         .meta-line { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
@@ -69,6 +76,7 @@
             <li><a href="#" onclick="showTab('closures')" id="nav-closures">Urlaub & Schließzeiten</a></li>
             <li><a href="#" onclick="showTab('menu')" id="nav-menu">Speisekarte</a></li>
             <li><a href="#" onclick="showTab('design')" id="nav-design">Design</a></li>
+            <li><a href="#" onclick="showTab('media')" id="nav-media">Mediathek</a></li>
             <li><a href="#" onclick="showTab('publish')" id="nav-publish">Veröffentlichung</a></li>
             <li><a href="#" onclick="showTab('plan')" id="nav-plan">Tarif & Domain</a></li>
             <li><a href="#" onclick="showTab('help')" id="nav-help">Hilfe</a></li>
@@ -228,6 +236,10 @@
                                 <img class="upload-preview" alt="">
                                 <div class="upload-copy"><strong>Logo ablegen</strong><span class="muted">PNG, JPG, WebP oder GIF bis 4 MB</span></div>
                             </div>
+                            <div class="toolbar" style="margin-top: 0.5rem;">
+                                <button type="button" class="btn-sm secondary" onclick="openMediaPicker('logo_image_url', this)">Aus Mediathek wählen</button>
+                                <button type="button" class="btn-sm secondary" onclick="clearImageInput('logo_image_url', this)">Bild entfernen</button>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Hero Bild</label>
@@ -236,12 +248,24 @@
                                 <img class="upload-preview" alt="">
                                 <div class="upload-copy"><strong>Hero-Bild ablegen</strong><span class="muted">Breites Bild für den Kopfbereich</span></div>
                             </div>
+                            <div class="toolbar" style="margin-top: 0.5rem;">
+                                <button type="button" class="btn-sm secondary" onclick="openMediaPicker('hero_image_url', this)">Aus Mediathek wählen</button>
+                                <button type="button" class="btn-sm secondary" onclick="clearImageInput('hero_image_url', this)">Bild entfernen</button>
+                            </div>
                         </div>
                     </div>
                     <div class="form-group"><label>Footer Notiz</label><input type="text" name="footer_note" maxlength="300"></div>
                     <button type="submit">Design speichern</button>
                 </form>
             </div>
+        </section>
+
+        <section id="tab-media" class="tab-content">
+            <div class="section-header">
+                <h1>Mediathek</h1>
+                <button type="button" class="secondary" onclick="loadMediaAssets()">Aktualisieren</button>
+            </div>
+            <div id="mediaLibrary" class="media-grid"></div>
         </section>
 
         <section id="tab-publish" class="tab-content">
@@ -274,12 +298,16 @@
     <div id="modal" class="modal-backdrop hidden">
         <div class="modal-card" id="modalContent"></div>
     </div>
+    <div id="mediaPicker" class="modal-backdrop hidden">
+        <div class="modal-card" id="mediaPickerContent"></div>
+    </div>
 
     <script>
         let restaurantData = null;
         let currentStatus = null;
         let currentMenu = null;
         let currentClosures = [];
+        let mediaAssets = [];
         const weekdays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
         async function init() {
@@ -307,7 +335,7 @@
             restaurantData = await res.json();
             fillForms();
             setupUploadZones(document);
-            await Promise.all([loadStatus(), loadOnboarding(), loadHours(), loadClosures(), loadMenu(), loadHelp()]);
+            await Promise.all([loadStatus(), loadOnboarding(), loadHours(), loadClosures(), loadMenu(), loadMediaAssets(), loadHelp()]);
         }
 
         function showSetupState() {
@@ -384,7 +412,24 @@
                     <img class="upload-preview" alt="">
                     <div class="upload-copy"><strong>${escapeHtml(label)}</strong><span class="muted">Bild hier ablegen oder klicken</span></div>
                 </div>
+                <div class="toolbar" style="margin-top: 0.5rem;">
+                    <button type="button" class="btn-sm secondary" onclick="openMediaPicker('${escapeAttr(inputName)}', this)">Aus Mediathek wählen</button>
+                    <button type="button" class="btn-sm secondary" onclick="clearImageInput('${escapeAttr(inputName)}', this)">Bild entfernen</button>
+                </div>
             `;
+        }
+
+        function findImageInput(inputName, trigger) {
+            const form = trigger?.closest('form') || document;
+            return form.querySelector(`[name="${inputName}"]`);
+        }
+
+        function clearImageInput(inputName, trigger) {
+            const input = findImageInput(inputName, trigger);
+            if (input) {
+                input.value = '';
+                refreshUploadPreviews(input.closest('form') || document);
+            }
         }
 
         function refreshUploadPreviews(root = document) {
@@ -426,7 +471,8 @@
                             method: 'POST',
                             headers: {
                                 'Content-Type': file.type,
-                                'X-Upload-Context': zone.dataset.context || 'image'
+                                'X-Upload-Context': zone.dataset.context || 'image',
+                                'X-Upload-Name': file.name || ''
                             },
                             body: file
                         });
@@ -434,6 +480,7 @@
                         if (!res.ok) throw new Error(data.error || 'Upload fehlgeschlagen.');
                         if (input) input.value = data.url;
                         refreshUploadPreviews(zone.closest('form') || document);
+                        await loadMediaAssets();
                     } catch (error) {
                         showAlert(error.message);
                     } finally {
@@ -688,6 +735,75 @@
                 </div>
             `}).join('');
             setupMenuDragAndDrop();
+        }
+
+        async function loadMediaAssets() {
+            mediaAssets = await api('/api/media-assets');
+            const container = document.getElementById('mediaLibrary');
+            if (!container) return;
+            if (!mediaAssets.length) {
+                container.innerHTML = '<div class="card"><p class="muted">Noch keine Bilder hochgeladen.</p></div>';
+                return;
+            }
+
+            container.innerHTML = mediaAssets.map(asset => `
+                <div class="media-tile">
+                    <img src="${escapeAttr(safeImageUrl(asset.url))}" alt="">
+                    <div class="media-tile-body">
+                        <strong>${escapeHtml(asset.context || 'Bild')}</strong>
+                        <small class="muted">${escapeHtml(asset.original_name || asset.url.split('/').pop())}</small>
+                        <small class="muted">${Math.round((asset.size_bytes || 0) / 1024)} KB</small>
+                        <button type="button" class="btn-sm btn-danger" onclick="deleteMediaAsset(${asset.id})">Löschen</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openMediaPicker(inputName, trigger) {
+            const input = findImageInput(inputName, trigger);
+            const pickerItems = mediaAssets.map(asset => `
+                <button type="button" class="media-picker-button" onclick="selectMediaAsset('${escapeAttr(inputName)}', '${escapeAttr(asset.url)}')">
+                    <img src="${escapeAttr(safeImageUrl(asset.url))}" alt="">
+                    <span style="display:block; padding:0.5rem; font-size:0.8rem;">${escapeHtml(asset.context || 'Bild')}</span>
+                </button>
+            `).join('');
+
+            document.getElementById('mediaPickerContent').innerHTML = `
+                <h2>Bild auswählen</h2>
+                ${mediaAssets.length ? `<div class="media-picker-grid">${pickerItems}</div>` : '<p class="muted">Noch keine Bilder in der Mediathek.</p>'}
+                <div class="toolbar" style="margin-top: 1.5rem;">
+                    <button type="button" class="secondary" onclick="closeMediaPicker()">Abbrechen</button>
+                </div>
+            `;
+            window.pendingMediaInput = input;
+            document.getElementById('mediaPicker').classList.remove('hidden');
+        }
+
+        function selectMediaAsset(inputName, url) {
+            const input = window.pendingMediaInput || document.querySelector(`[name="${inputName}"]`);
+            if (input) {
+                input.value = url;
+                refreshUploadPreviews(input.closest('form') || document);
+            }
+            window.pendingMediaInput = null;
+            closeMediaPicker();
+        }
+
+        function closeMediaPicker() {
+            document.getElementById('mediaPicker').classList.add('hidden');
+            document.getElementById('mediaPickerContent').innerHTML = '';
+            window.pendingMediaInput = null;
+        }
+
+        async function deleteMediaAsset(id) {
+            if (!confirm('Bild aus der Mediathek löschen? Verwendete Bilder können nicht gelöscht werden.')) return;
+            try {
+                await api(`/api/media-assets/${id}`, { method: 'DELETE' });
+                showSuccess();
+                await loadMediaAssets();
+            } catch (error) {
+                showAlert(error.message);
+            }
         }
 
         function renderDish(dish, categoryId) {
@@ -1093,6 +1209,9 @@
 
         document.getElementById('modal').addEventListener('click', event => {
             if (event.target.id === 'modal') closeModal();
+        });
+        document.getElementById('mediaPicker').addEventListener('click', event => {
+            if (event.target.id === 'mediaPicker') closeMediaPicker();
         });
 
         init().catch(error => showAlert(error.message));
