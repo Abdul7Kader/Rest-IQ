@@ -56,6 +56,9 @@ Bereitet die Integration externer Partner vor.
 Der Plattform-Admin sieht operative Kennzahlen und Detaildaten je Restaurant.
 - **Summary**: Restaurantanzahl, Tarifverteilung, Domainstatus, Inhaltsumfang, Medien und Deploy-Events.
 - **Restaurantdetails**: Owner, Tarif, Inhaltcounts, Domains und letzte Publish-Events.
+- **Konfiguration**: `platform_settings` speichert globale Betreiberwerte wie Support-E-Mail, Standard-Werbelabel, Domain-Hinweis und ob vor Livegang eine menschliche Qualitätsprüfung erwartet wird.
+- **Werbeplätze**: `ad_slots` definiert verwaltete Anzeigenplätze ohne freie Skript-/HTML-Eingaben. Für echte Werbenetzwerke wird später eine kontrollierte Integration ergänzt.
+- **Affiliate/Domain-Provider**: `domain_providers` ist im Plattform-Admin editierbar und bleibt die Quelle für externe Domain-Links.
 - **Sicherheit**: Admin-APIs sind ausschließlich für `platform_admin` freigegeben; Owner erhalten keinen Zugriff.
 
 ## 5. Menü-Struktur
@@ -97,6 +100,7 @@ Die Speisekarte ist hierarchisch aufgebaut:
 - **Passwortregeln**: Neue Passwörter müssen 8 bis 128 Zeichen lang sein und mindestens einen Buchstaben sowie eine Zahl enthalten. Klartextpasswörter werden nicht gespeichert.
 - **Session-Management**: Nutzt `express-session` mit einem persistenten SQLite-Store in der Tabelle `sessions`.
 - **Session-Schutz**: Session-IDs werden nicht im Klartext in der UI angezeigt, Cookies sind `httpOnly`, `sameSite=lax` und in Produktion `secure`. Beim Login und bei der Registrierung wird die Session neu erzeugt, um Session-Fixation zu vermeiden.
+- **CSRF-Schutz**: Angemeldete mutierende APIs (`POST`, `PATCH`, `DELETE`) verlangen einen Session-CSRF-Token über `X-CSRF-Token`. Registrierung und Login bleiben ausgenommen, aber rate-limited.
 - **Ablauf & Wartung**: Sessions speichern einen Ablaufzeitpunkt (`expires`) und abgelaufene Einträge werden regelmäßig bereinigt. Für sehr hohe Last kann der Store später zentral im `server.js` gegen Redis oder einen anderen produktiven Session-Store getauscht werden.
 
 ## 8. Performance & Wartung

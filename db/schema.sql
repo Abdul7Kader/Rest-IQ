@@ -226,7 +226,33 @@ CREATE TABLE domain_providers (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 14. Sessions
+-- 14. Platform Settings
+-- Global Restiq operator configuration
+CREATE TABLE platform_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    setting_key TEXT UNIQUE NOT NULL,
+    setting_value TEXT,
+    updated_by_user_id INTEGER,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 15. Ad Slots
+-- Managed advertising placeholders and provider mapping
+CREATE TABLE ad_slots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slot_key TEXT UNIQUE NOT NULL,
+    label TEXT NOT NULL,
+    placement TEXT NOT NULL CHECK(placement IN ('hero', 'menu', 'sidebar', 'footer')),
+    provider_name TEXT,
+    placeholder_text TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 16. Sessions
 -- Persistent express-session store
 CREATE TABLE sessions (
     sid TEXT PRIMARY KEY,
@@ -236,7 +262,7 @@ CREATE TABLE sessions (
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- 15. Media Assets
+-- 17. Media Assets
 -- Owner-uploaded restaurant images
 CREATE TABLE media_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -252,7 +278,7 @@ CREATE TABLE media_assets (
     FOREIGN KEY (restaurant_id) REFERENCES restaurants(id) ON DELETE CASCADE
 );
 
--- 16. Indexes for Performance
+-- 18. Indexes for Performance
 CREATE INDEX idx_restaurants_owner_user_id ON restaurants(owner_user_id);
 CREATE INDEX idx_menus_restaurant_id ON menus(restaurant_id);
 CREATE INDEX idx_menu_categories_menu_id ON menu_categories(menu_id);
@@ -265,4 +291,5 @@ CREATE INDEX idx_publish_events_restaurant_id ON publish_events(restaurant_id);
 CREATE INDEX idx_plan_change_log_restaurant_id ON plan_change_log(restaurant_id);
 CREATE INDEX idx_sessions_expires ON sessions(expires);
 CREATE INDEX idx_media_assets_restaurant_id ON media_assets(restaurant_id);
+CREATE INDEX idx_ad_slots_active ON ad_slots(is_active, placement);
 CREATE INDEX idx_media_assets_active ON media_assets(is_active, created_at);

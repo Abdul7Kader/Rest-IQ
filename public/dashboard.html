@@ -320,6 +320,7 @@
         let currentMenu = null;
         let currentClosures = [];
         let mediaAssets = [];
+        let csrfToken = null;
         const weekdays = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
 
         async function init() {
@@ -380,13 +381,27 @@
             refreshUploadPreviews();
         }
 
+        async function getCsrfToken() {
+            if (csrfToken) return csrfToken;
+            const res = await fetch('/api/auth/csrf');
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'CSRF token unavailable.');
+            csrfToken = data.csrfToken;
+            return csrfToken;
+        }
+
         async function api(path, options = {}) {
+            const method = (options.method || 'GET').toUpperCase();
+            const headers = {
+                'Content-Type': 'application/json',
+                ...(options.headers || {})
+            };
+            if (['POST', 'PATCH', 'DELETE'].includes(method)) {
+                headers['X-CSRF-Token'] = await getCsrfToken();
+            }
             const res = await fetch(path, {
                 ...options,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(options.headers || {})
-                }
+                headers
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'Request failed.');
@@ -484,7 +499,8 @@
                             headers: {
                                 'Content-Type': file.type,
                                 'X-Upload-Context': zone.dataset.context || 'image',
-                                'X-Upload-Name': file.name || ''
+                                'X-Upload-Name': file.name || '',
+                                'X-CSRF-Token': await getCsrfToken()
                             },
                             body: file
                         });
@@ -557,7 +573,7 @@
 
             document.getElementById('statusPanel').innerHTML = `
                 <div class="status-box"><div class="status-label">Restaurant</div><div class="status-value">${escapeHtml(status.restaurantName)}</div><small>${escapeHtml(status.slug)}</small></div>
-                <div class="status-box"><div class="status-label">Seitenstatus</div><div class="status-value"><span class="status-pill status-muted">Entwurf</span></div><small>Online-Veröffentlichung folgt über den Deploy-Flow.</small></div>
+                <div class="status-box"><div class="status-label">Seitenstatus</div><div class="status-value"><span class="status-pill ${status.pageStatus === 'online' ? 'status-ok' : (status.pageStatus === 'error' ? 'status-warn' : 'status-muted')}">${escapeHtml(status.pageStatusLabel || 'Entwurf')}</span></div><small>${status.lastPublishMessage ? escapeHtml(status.lastPublishMessage) : 'Online-Veröffentlichung folgt über den Deploy-Flow.'}</small></div>
                 <div class="status-box"><div class="status-label">Kostenlose Adresse</div><div class="status-value">${escapeHtml(status.freeHostname)}</div><small><span class="status-pill ${domainClass}">${escapeHtml(status.freeDomainStatus)}</span></small></div>
                 <div class="status-box"><div class="status-label">Template / Tarif</div><div class="status-value">${escapeHtml(status.template || 'free_default')} / ${escapeHtml(status.plan)}</div><small>${status.lastPublishStatus ? `letztes Event: ${escapeHtml(status.lastPublishStatus)}` : 'kein Publish-Event'}</small></div>
                 <div class="status-box"><div class="status-label">Nächster Schritt</div><div class="status-value">${escapeHtml(status.nextStep)}</div></div>
@@ -1201,7 +1217,7 @@
         });
 
         document.getElementById('logoutBtn').addEventListener('click', () => {
-            fetch('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = 'index.html');
+            api('/api/auth/logout', { method: 'POST' }).then(() => window.location.href = 'index.html');
         });
 
         document.getElementById('cfPrepareBtn').addEventListener('click', async () => {

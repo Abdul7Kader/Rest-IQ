@@ -54,3 +54,15 @@ INSERT INTO help_articles (article_type, title, slug, content_markdown, sort_ord
 INSERT INTO domain_providers (provider_name, provider_type, website_url, affiliate_base_url, supports_free_domains, supports_paid_domains) VALUES 
 ('Cloudflare', 'free_hosting', 'https://cloudflare.com', NULL, 1, 0),
 ('Namecheap', 'registrar', 'https://namecheap.com', 'https://namecheap.com?aff=restiq', 0, 1);
+
+-- 13. Platform Settings
+INSERT INTO platform_settings (setting_key, setting_value) VALUES
+('support_email', 'support@restiq.app'),
+('default_ad_label', 'Werbeplatz'),
+('domain_affiliate_note', 'Domainkauf erfolgt extern über einen Partner-Link. Die DNS-Prüfung folgt später.'),
+('quality_review_required', '1');
+
+-- 14. Ad Slots
+INSERT INTO ad_slots (slot_key, label, placement, provider_name, placeholder_text, is_active) VALUES
+('free_menu_top', 'Free Menü oben', 'menu', 'manual', 'Werbeplatz für lokale Angebote', 1),
+('free_footer', 'Free Footer', 'footer', 'manual', 'RestIQ unterstützt lokale Restaurants', 1);

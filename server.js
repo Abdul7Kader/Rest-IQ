@@ -15,6 +15,13 @@ const SESSION_COOKIE_NAME = 'restiq.sid';
 const SESSION_SECRET = process.env.SESSION_SECRET || 'restiq-fallback-secret';
 const IMAGE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 const IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const CSRF_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/register']);
+const PLATFORM_SETTING_KEYS = new Set([
+    'support_email',
+    'default_ad_label',
+    'domain_affiliate_note',
+    'quality_review_required'
+]);
 
 if (isProduction && SESSION_SECRET === 'restiq-fallback-secret') {
     throw new Error('SESSION_SECRET must be set in production.');
@@ -112,12 +119,35 @@ function establishSession(req, user) {
             req.session.userId = user.id;
             req.session.role = user.role;
             req.session.email = user.email;
+            req.session.csrfToken = crypto.randomBytes(32).toString('hex');
             resolve();
         });
     });
 }
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
+
+function ensureCsrfToken(req) {
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = crypto.randomBytes(32).toString('hex');
+    }
+    return req.session.csrfToken;
+}
+
+function csrfProtection(req, res, next) {
+    if (!['POST', 'PATCH', 'DELETE'].includes(req.method)) return next();
+    if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
+
+    const expected = req.session && req.session.csrfToken;
+    const actual = req.get('x-csrf-token');
+    if (!expected || !actual || actual !== expected) {
+        return res.status(403).json({ error: 'Invalid CSRF token.' });
+    }
+
+    next();
+}
+
+app.use(csrfProtection);
 
 function trimText(value, maxLength = 500) {
     return String(value || '').trim().slice(0, maxLength);
@@ -290,6 +320,46 @@ function normalizeDomainChoice(value) {
     return choice;
 }
 
+function normalizeProviderType(value) {
+    const type = trimText(value, 30) || 'registrar';
+    if (!['registrar', 'free_hosting', 'both'].includes(type)) {
+        throw new Error('INVALID_PROVIDER_TYPE');
+    }
+    return type;
+}
+
+function normalizeDomainStatus(value) {
+    const status = trimText(value, 30);
+    if (!['pending', 'active', 'failed', 'disabled'].includes(status)) {
+        throw new Error('INVALID_DOMAIN_STATUS');
+    }
+    return status;
+}
+
+function normalizePublishStatus(value) {
+    const status = trimText(value, 30);
+    if (!['queued', 'running', 'success', 'error'].includes(status)) {
+        throw new Error('INVALID_PUBLISH_STATUS');
+    }
+    return status;
+}
+
+function normalizeAdPlacement(value) {
+    const placement = trimText(value, 30) || 'menu';
+    if (!['hero', 'menu', 'sidebar', 'footer'].includes(placement)) {
+        throw new Error('INVALID_AD_PLACEMENT');
+    }
+    return placement;
+}
+
+function normalizeSettingKey(value) {
+    const key = trimText(value, 80);
+    if (!PLATFORM_SETTING_KEYS.has(key)) {
+        throw new Error('INVALID_SETTING_KEY');
+    }
+    return key;
+}
+
 function normalizeHostname(value) {
     let hostname = trimText(value, 253)
         .toLowerCase()
@@ -354,7 +424,12 @@ function sendValidationError(res, error) {
         REQUIRED_PRICE: 'Price is required.',
         INVALID_PLAN: 'Invalid plan selection.',
         INVALID_DOMAIN_CHOICE: 'Invalid domain option.',
-        INVALID_HOSTNAME: 'Invalid domain name.'
+        INVALID_HOSTNAME: 'Invalid domain name.',
+        INVALID_PROVIDER_TYPE: 'Invalid provider type.',
+        INVALID_DOMAIN_STATUS: 'Invalid domain status.',
+        INVALID_PUBLISH_STATUS: 'Invalid deploy status.',
+        INVALID_AD_PLACEMENT: 'Invalid ad placement.',
+        INVALID_SETTING_KEY: 'Invalid platform setting.'
     };
     return res.status(400).json({ error: messages[error.message] || 'Invalid input.' });
 }
@@ -578,6 +653,50 @@ function ensureDefaultDomainProviders() {
     transaction();
 }
 
+function ensureDefaultPlatformSettings() {
+    const upsert = db.prepare(`
+        INSERT INTO platform_settings (setting_key, setting_value, updated_by_user_id)
+        VALUES (?, ?, NULL)
+        ON CONFLICT(setting_key) DO NOTHING
+    `);
+
+    const transaction = db.transaction(() => {
+        upsert.run('support_email', 'support@restiq.app');
+        upsert.run('default_ad_label', 'Werbeplatz');
+        upsert.run('domain_affiliate_note', 'Domainkauf erfolgt extern über einen Partner-Link. Die DNS-Prüfung folgt später.');
+        upsert.run('quality_review_required', '1');
+    });
+    transaction();
+}
+
+function ensureDefaultAdSlots() {
+    const upsert = db.prepare(`
+        INSERT INTO ad_slots (slot_key, label, placement, provider_name, placeholder_text, is_active)
+        VALUES (@slot_key, @label, @placement, @provider_name, @placeholder_text, @is_active)
+        ON CONFLICT(slot_key) DO NOTHING
+    `);
+
+    const transaction = db.transaction(() => {
+        upsert.run({
+            slot_key: 'free_menu_top',
+            label: 'Free Menü oben',
+            placement: 'menu',
+            provider_name: 'manual',
+            placeholder_text: 'Werbeplatz für lokale Angebote',
+            is_active: 1
+        });
+        upsert.run({
+            slot_key: 'free_footer',
+            label: 'Free Footer',
+            placement: 'footer',
+            provider_name: 'manual',
+            placeholder_text: 'RestIQ unterstützt lokale Restaurants',
+            is_active: 1
+        });
+    });
+    transaction();
+}
+
 function ensureApplicationTables() {
     db.exec(`
         CREATE TABLE IF NOT EXISTS special_closures (
@@ -622,6 +741,27 @@ function ensureApplicationTables() {
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE TABLE IF NOT EXISTS platform_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            setting_key TEXT UNIQUE NOT NULL,
+            setting_value TEXT,
+            updated_by_user_id INTEGER,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (updated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+        CREATE TABLE IF NOT EXISTS ad_slots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slot_key TEXT UNIQUE NOT NULL,
+            label TEXT NOT NULL,
+            placement TEXT NOT NULL CHECK(placement IN ('hero', 'menu', 'sidebar', 'footer')),
+            provider_name TEXT,
+            placeholder_text TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_ad_slots_active ON ad_slots(is_active, placement);
     `);
 
     const addColumnIfMissing = (tableName, columnName, definition) => {
@@ -726,6 +866,10 @@ app.get('/api/auth/me', (req, res) => {
     }
 });
 
+app.get('/api/auth/csrf', isAuthenticated, (req, res) => {
+    res.json({ csrfToken: ensureCsrfToken(req) });
+});
+
 app.get('/api/public/domain-providers', (req, res) => {
     const providers = db.prepare(`
         SELECT provider_name, provider_type, website_url, affiliate_base_url,
@@ -740,7 +884,7 @@ app.get('/api/public/domain-providers', (req, res) => {
 
 // --- Restaurant Routes (Expanded) ---
 
-app.get('/api/restaurant', isAuthenticated, (req, res) => {
+app.get('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const restaurant = db.prepare(`
         SELECT r.*, s.current_plan, s.template_key, s.ads_enabled, s.donation_hint_enabled,
                s.is_published, s.primary_language, s.accent_color, s.hero_title,
@@ -856,6 +1000,18 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
     } else if (restaurant.free_domain_status === 'active') {
         nextStep = 'Live-Seite pruefen';
     }
+    const pageStatusKey = restaurant.last_publish_status === 'error'
+        ? 'error'
+        : (restaurant.free_domain_status === 'active'
+            ? 'online'
+            : (restaurant.last_publish_status === 'success' || restaurant.free_domain_status === 'pending' ? 'export_prepared' : 'draft'));
+    const pageStatusLabel = {
+        draft: 'Entwurf',
+        ready: 'Bereit zur Veröffentlichung',
+        export_prepared: 'Export vorbereitet',
+        online: 'Online',
+        error: 'Fehler'
+    }[pageStatusKey];
 
     res.json({
         restaurantId: restaurant.id,
@@ -863,7 +1019,8 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         slug: restaurant.public_slug_internal,
         plan: restaurant.current_plan,
         template: restaurant.template_key,
-        pageStatus: restaurant.free_domain_status === 'active' ? 'live' : 'draft',
+        pageStatus: pageStatusKey,
+        pageStatusLabel,
         expectedFreeHostname,
         freeHostname: restaurant.free_hostname || expectedFreeHostname,
         freeDomainStatus: restaurant.free_domain_status || 'not_prepared',
@@ -1717,7 +1874,7 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
     return viewModel;
 }
 
-app.get('/api/preview', isAuthenticated, (req, res) => {
+app.get('/api/preview', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const restaurant = db.prepare('SELECT id FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
     res.json(getPreviewData(restaurant.id));
@@ -1740,7 +1897,7 @@ app.get('/preview/:id', isAuthenticated, hasRole('platform_admin'), (req, res) =
 // Bereitet den Cloudflare Pages Export vor (Free Plan only).
 // Erstellt cloudflare-export/<slug>/ mit _redirects, _headers, deploy-info.json.
 
-app.post('/api/restaurant/cf-prepare', isAuthenticated, (req, res) => {
+app.post('/api/restaurant/cf-prepare', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
@@ -2010,6 +2167,212 @@ app.get('/api/admin/summary', isAuthenticated, hasRole('platform_admin'), (req, 
     });
 });
 
+app.get('/api/admin/platform-settings', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const rows = db.prepare(`
+        SELECT setting_key, setting_value, updated_at
+        FROM platform_settings
+        ORDER BY setting_key ASC
+    `).all();
+    res.json(rows.reduce((settings, row) => {
+        settings[row.setting_key] = row.setting_value;
+        return settings;
+    }, {}));
+});
+
+app.patch('/api/admin/platform-settings', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const body = req.body || {};
+    const entries = Object.entries(body);
+    if (entries.length === 0) return res.status(400).json({ error: 'No settings provided.' });
+
+    try {
+        const update = db.prepare(`
+            INSERT INTO platform_settings (setting_key, setting_value, updated_by_user_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value,
+                updated_by_user_id = excluded.updated_by_user_id,
+                updated_at = CURRENT_TIMESTAMP
+        `);
+        const transaction = db.transaction(() => {
+            for (const [key, value] of entries) {
+                update.run(normalizeSettingKey(key), trimText(value, 1000), req.session.userId);
+            }
+        });
+        transaction();
+        res.json({ success: true });
+    } catch (error) {
+        if (error.message === 'INVALID_SETTING_KEY') return sendValidationError(res, error);
+        res.status(500).json({ error: 'Settings update failed.' });
+    }
+});
+
+app.get('/api/admin/domain-providers', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const providers = db.prepare(`
+        SELECT id, provider_name, provider_type, website_url, affiliate_base_url,
+               supports_free_domains, supports_paid_domains, is_active, sort_order,
+               created_at, updated_at
+        FROM domain_providers
+        ORDER BY sort_order ASC, provider_name ASC
+    `).all();
+    res.json(providers);
+});
+
+app.post('/api/admin/domain-providers', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    try {
+        const body = req.body || {};
+        const providerName = trimText(body.provider_name, 120);
+        if (!providerName) return res.status(400).json({ error: 'Provider name is required.' });
+
+        const info = db.prepare(`
+            INSERT INTO domain_providers (
+                provider_name, provider_type, website_url, affiliate_base_url,
+                supports_free_domains, supports_paid_domains, is_active, sort_order
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            providerName,
+            normalizeProviderType(body.provider_type),
+            normalizeHttpUrl(body.website_url),
+            normalizeHttpUrl(body.affiliate_base_url),
+            normalizeBooleanFlag(body.supports_free_domains),
+            normalizeBooleanFlag(body.supports_paid_domains),
+            normalizeBooleanFlag(body.is_active),
+            normalizeInteger(body.sort_order, 0)
+        );
+
+        res.json({ success: true, id: info.lastInsertRowid });
+    } catch (error) {
+        if (['INVALID_PROVIDER_TYPE', 'INVALID_URL', 'INVALID_URL_PROTOCOL', 'INVALID_INTEGER'].includes(error.message)) {
+            return sendValidationError(res, error);
+        }
+        if (error.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ error: 'Provider already exists.' });
+        }
+        res.status(500).json({ error: 'Provider creation failed.' });
+    }
+});
+
+app.patch('/api/admin/domain-providers/:id', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const provider = db.prepare('SELECT id FROM domain_providers WHERE id = ?').get(req.params.id);
+    if (!provider) return res.status(404).json({ error: 'Provider not found.' });
+
+    try {
+        const body = req.body || {};
+        const providerName = trimText(body.provider_name, 120);
+        if (!providerName) return res.status(400).json({ error: 'Provider name is required.' });
+
+        db.prepare(`
+            UPDATE domain_providers
+            SET provider_name = ?, provider_type = ?, website_url = ?, affiliate_base_url = ?,
+                supports_free_domains = ?, supports_paid_domains = ?, is_active = ?,
+                sort_order = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `).run(
+            providerName,
+            normalizeProviderType(body.provider_type),
+            normalizeHttpUrl(body.website_url),
+            normalizeHttpUrl(body.affiliate_base_url),
+            normalizeBooleanFlag(body.supports_free_domains),
+            normalizeBooleanFlag(body.supports_paid_domains),
+            normalizeBooleanFlag(body.is_active),
+            normalizeInteger(body.sort_order, 0),
+            provider.id
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        if (['INVALID_PROVIDER_TYPE', 'INVALID_URL', 'INVALID_URL_PROTOCOL', 'INVALID_INTEGER'].includes(error.message)) {
+            return sendValidationError(res, error);
+        }
+        if (error.message.includes('UNIQUE constraint failed')) {
+            return res.status(400).json({ error: 'Provider already exists.' });
+        }
+        res.status(500).json({ error: 'Provider update failed.' });
+    }
+});
+
+app.delete('/api/admin/domain-providers/:id', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const info = db.prepare('DELETE FROM domain_providers WHERE id = ?').run(req.params.id);
+    if (info.changes === 0) return res.status(404).json({ error: 'Provider not found.' });
+    res.json({ success: true });
+});
+
+app.get('/api/admin/ad-slots', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const slots = db.prepare(`
+        SELECT id, slot_key, label, placement, provider_name, placeholder_text,
+               is_active, created_at, updated_at
+        FROM ad_slots
+        ORDER BY placement ASC, slot_key ASC
+    `).all();
+    res.json(slots);
+});
+
+app.post('/api/admin/ad-slots', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    try {
+        const body = req.body || {};
+        const slotKey = slugify(body.slot_key || body.label).replace(/-/g, '_');
+        const label = trimText(body.label, 120);
+        if (!slotKey || !label) return res.status(400).json({ error: 'Slot key and label are required.' });
+
+        const info = db.prepare(`
+            INSERT INTO ad_slots (slot_key, label, placement, provider_name, placeholder_text, is_active)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `).run(
+            slotKey,
+            label,
+            normalizeAdPlacement(body.placement),
+            normalizeNullableText(body.provider_name, 120),
+            normalizeNullableText(body.placeholder_text, 500),
+            normalizeBooleanFlag(body.is_active)
+        );
+
+        res.json({ success: true, id: info.lastInsertRowid });
+    } catch (error) {
+        if (['INVALID_AD_PLACEMENT'].includes(error.message)) return sendValidationError(res, error);
+        if (error.message.includes('UNIQUE constraint failed')) return res.status(400).json({ error: 'Ad slot already exists.' });
+        res.status(500).json({ error: 'Ad slot creation failed.' });
+    }
+});
+
+app.patch('/api/admin/ad-slots/:id', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const slot = db.prepare('SELECT id FROM ad_slots WHERE id = ?').get(req.params.id);
+    if (!slot) return res.status(404).json({ error: 'Ad slot not found.' });
+
+    try {
+        const body = req.body || {};
+        const slotKey = slugify(body.slot_key || body.label).replace(/-/g, '_');
+        const label = trimText(body.label, 120);
+        if (!slotKey || !label) return res.status(400).json({ error: 'Slot key and label are required.' });
+
+        db.prepare(`
+            UPDATE ad_slots
+            SET slot_key = ?, label = ?, placement = ?, provider_name = ?,
+                placeholder_text = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `).run(
+            slotKey,
+            label,
+            normalizeAdPlacement(body.placement),
+            normalizeNullableText(body.provider_name, 120),
+            normalizeNullableText(body.placeholder_text, 500),
+            normalizeBooleanFlag(body.is_active),
+            slot.id
+        );
+
+        res.json({ success: true });
+    } catch (error) {
+        if (['INVALID_AD_PLACEMENT'].includes(error.message)) return sendValidationError(res, error);
+        if (error.message.includes('UNIQUE constraint failed')) return res.status(400).json({ error: 'Ad slot already exists.' });
+        res.status(500).json({ error: 'Ad slot update failed.' });
+    }
+});
+
+app.delete('/api/admin/ad-slots/:id', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const info = db.prepare('DELETE FROM ad_slots WHERE id = ?').run(req.params.id);
+    if (info.changes === 0) return res.status(404).json({ error: 'Ad slot not found.' });
+    res.json({ success: true });
+});
+
 app.get('/api/admin/restaurants', isAuthenticated, hasRole('platform_admin'), (req, res) => {
     const query = `
         SELECT r.*, u.email as owner_email, s.current_plan, s.is_published,
@@ -2089,6 +2452,85 @@ app.get('/api/admin/restaurants/:id', isAuthenticated, hasRole('platform_admin')
     res.json({ restaurant, domains, publishEvents, counts });
 });
 
+app.patch('/api/admin/restaurants/:id/status', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const restaurant = db.prepare('SELECT id FROM restaurants WHERE id = ?').get(req.params.id);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const isActive = normalizeBooleanFlag(req.body && req.body.is_active);
+    db.prepare('UPDATE restaurants SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(isActive, restaurant.id);
+    res.json({ success: true, is_active: isActive });
+});
+
+app.patch('/api/admin/restaurants/:id/plan', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const restaurant = db.prepare(`
+        SELECT r.id, s.current_plan
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+        WHERE r.id = ?
+    `).get(req.params.id);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    try {
+        const newPlan = normalizePlan(req.body && req.body.current_plan);
+        const transaction = db.transaction(() => {
+            if (restaurant.current_plan !== newPlan) {
+                db.prepare(`
+                    INSERT INTO plan_change_log (restaurant_id, old_plan, new_plan, changed_by_user_id)
+                    VALUES (?, ?, ?, ?)
+                `).run(restaurant.id, restaurant.current_plan, newPlan, req.session.userId);
+            }
+            db.prepare(`
+                UPDATE site_configs
+                SET current_plan = ?,
+                    ads_enabled = ?,
+                    donation_hint_enabled = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE restaurant_id = ?
+            `).run(newPlan, newPlan === 'free' ? 1 : 0, newPlan === 'free' ? 1 : 0, restaurant.id);
+        });
+        transaction();
+        res.json({ success: true, current_plan: newPlan });
+    } catch (error) {
+        if (error.message === 'INVALID_PLAN') return sendValidationError(res, error);
+        res.status(500).json({ error: 'Plan update failed.' });
+    }
+});
+
+app.patch('/api/admin/domains/:id/status', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const domain = db.prepare('SELECT id, restaurant_id, hostname FROM site_domains WHERE id = ?').get(req.params.id);
+    if (!domain) return res.status(404).json({ error: 'Domain not found.' });
+
+    try {
+        const status = normalizeDomainStatus(req.body && req.body.status);
+        const isPrimary = normalizeBooleanFlag(req.body && req.body.is_primary);
+        const eventStatus = req.body && req.body.publish_status ? normalizePublishStatus(req.body.publish_status) : null;
+        const message = normalizeNullableText(req.body && req.body.message, 500);
+
+        const transaction = db.transaction(() => {
+            if (isPrimary && status === 'active') {
+                db.prepare('UPDATE site_domains SET is_primary = 0, updated_at = CURRENT_TIMESTAMP WHERE restaurant_id = ?').run(domain.restaurant_id);
+            }
+            db.prepare(`
+                UPDATE site_domains
+                SET status = ?, is_primary = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            `).run(status, status === 'active' ? isPrimary : 0, domain.id);
+
+            if (eventStatus) {
+                db.prepare(`
+                    INSERT INTO publish_events (restaurant_id, trigger_type, target_hostname, status, message, finished_at)
+                    VALUES (?, 'domain_change', ?, ?, ?, CURRENT_TIMESTAMP)
+                `).run(domain.restaurant_id, domain.hostname, eventStatus, message || 'Domainstatus im Plattform-Admin aktualisiert.');
+            }
+        });
+        transaction();
+        res.json({ success: true, status, is_primary: status === 'active' ? isPrimary : 0 });
+    } catch (error) {
+        if (['INVALID_DOMAIN_STATUS', 'INVALID_PUBLISH_STATUS'].includes(error.message)) return sendValidationError(res, error);
+        res.status(500).json({ error: 'Domain status update failed.' });
+    }
+});
+
 // --- Help Routes ---
 
 app.get('/api/help/articles', (req, res) => {
@@ -2105,6 +2547,8 @@ app.get('/api/help/articles/:id', (req, res) => {
 ensureApplicationTables();
 ensureDefaultHelpArticles();
 ensureDefaultDomainProviders();
+ensureDefaultPlatformSettings();
+ensureDefaultAdSlots();
 
 app.listen(port, () => {
     console.log(`Restiq running at http://localhost:${port}`);
