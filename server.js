@@ -1883,18 +1883,82 @@ app.post('/api/admin/cf-prepare/:restaurantId', isAuthenticated, hasRole('platfo
 
 // --- Admin Routes ---
 
+app.get('/api/admin/summary', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const totals = db.prepare(`
+        SELECT
+            COUNT(*) as restaurants,
+            SUM(CASE WHEN r.is_active = 1 THEN 1 ELSE 0 END) as active_restaurants,
+            SUM(CASE WHEN s.current_plan = 'free' THEN 1 ELSE 0 END) as free_plan,
+            SUM(CASE WHEN s.current_plan = 'paid' THEN 1 ELSE 0 END) as paid_plan
+        FROM restaurants r
+        JOIN site_configs s ON r.id = s.restaurant_id
+    `).get();
+
+    const domains = db.prepare(`
+        SELECT
+            SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_domains,
+            SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_domains,
+            SUM(CASE WHEN domain_type = 'custom' THEN 1 ELSE 0 END) as custom_domains
+        FROM site_domains
+    `).get();
+
+    const content = db.prepare(`
+        SELECT
+            (SELECT COUNT(*) FROM dishes WHERE is_active = 1) as active_dishes,
+            (SELECT COUNT(*) FROM menu_categories WHERE is_active = 1) as active_categories,
+            (SELECT COUNT(*) FROM media_assets WHERE is_active = 1) as media_assets,
+            (SELECT COUNT(*) FROM special_closures WHERE is_active = 1) as active_closures
+    `).get();
+
+    const deploys = db.prepare(`
+        SELECT
+            COUNT(*) as publish_events,
+            SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) as successful_events,
+            SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as failed_events
+        FROM publish_events
+    `).get();
+
+    res.json({
+        restaurants: totals.restaurants || 0,
+        activeRestaurants: totals.active_restaurants || 0,
+        freePlan: totals.free_plan || 0,
+        paidPlan: totals.paid_plan || 0,
+        pendingDomains: domains.pending_domains || 0,
+        activeDomains: domains.active_domains || 0,
+        customDomains: domains.custom_domains || 0,
+        activeDishes: content.active_dishes || 0,
+        activeCategories: content.active_categories || 0,
+        mediaAssets: content.media_assets || 0,
+        activeClosures: content.active_closures || 0,
+        publishEvents: deploys.publish_events || 0,
+        successfulEvents: deploys.successful_events || 0,
+        failedEvents: deploys.failed_events || 0
+    });
+});
+
 app.get('/api/admin/restaurants', isAuthenticated, hasRole('platform_admin'), (req, res) => {
     const query = `
         SELECT r.*, u.email as owner_email, s.current_plan, s.is_published,
                s.template_key, d.hostname as free_hostname, d.status as free_domain_status,
+               cd.hostname as custom_hostname, cd.status as custom_domain_status,
                pe.status as last_publish_status, pe.created_at as last_publish_at,
-               pe.message as last_publish_message
+               pe.message as last_publish_message,
+               (SELECT COUNT(*) FROM menu_categories mc JOIN menus m ON mc.menu_id = m.id WHERE m.restaurant_id = r.id) as category_count,
+               (SELECT COUNT(*) FROM dishes di JOIN menu_categories mc ON di.category_id = mc.id JOIN menus m ON mc.menu_id = m.id WHERE m.restaurant_id = r.id) as dish_count,
+               (SELECT COUNT(*) FROM media_assets ma WHERE ma.restaurant_id = r.id AND ma.is_active = 1) as media_count,
+               (SELECT COUNT(*) FROM special_closures sc WHERE sc.restaurant_id = r.id AND sc.is_active = 1) as closure_count
         FROM restaurants r
         JOIN users u ON r.owner_user_id = u.id
         JOIN site_configs s ON r.id = s.restaurant_id
         LEFT JOIN site_domains d ON d.id = (
             SELECT id FROM site_domains
             WHERE restaurant_id = r.id AND domain_type = 'free_generated'
+            ORDER BY updated_at DESC, id DESC
+            LIMIT 1
+        )
+        LEFT JOIN site_domains cd ON cd.id = (
+            SELECT id FROM site_domains
+            WHERE restaurant_id = r.id AND domain_type = 'custom'
             ORDER BY updated_at DESC, id DESC
             LIMIT 1
         )
@@ -1908,6 +1972,47 @@ app.get('/api/admin/restaurants', isAuthenticated, hasRole('platform_admin'), (r
     `;
     const restaurants = db.prepare(query).all();
     res.json(restaurants);
+});
+
+app.get('/api/admin/restaurants/:id', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+    const restaurant = db.prepare(`
+        SELECT r.*, u.email as owner_email, u.is_active as owner_is_active,
+               s.current_plan, s.template_key, s.accent_color, s.hero_title,
+               s.hero_subtitle, s.seo_title, s.seo_description, s.font_family,
+               s.heading_style, s.menu_layout, s.dish_image_style
+        FROM restaurants r
+        JOIN users u ON r.owner_user_id = u.id
+        JOIN site_configs s ON r.id = s.restaurant_id
+        WHERE r.id = ?
+    `).get(req.params.id);
+    if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
+
+    const domains = db.prepare(`
+        SELECT id, hostname, domain_type, is_primary, status, created_at, updated_at
+        FROM site_domains
+        WHERE restaurant_id = ?
+        ORDER BY is_primary DESC, updated_at DESC, id DESC
+    `).all(restaurant.id);
+
+    const publishEvents = db.prepare(`
+        SELECT id, trigger_type, target_hostname, status, message, created_at, finished_at
+        FROM publish_events
+        WHERE restaurant_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT 10
+    `).all(restaurant.id);
+
+    const counts = db.prepare(`
+        SELECT
+            (SELECT COUNT(*) FROM menus WHERE restaurant_id = ?) as menus,
+            (SELECT COUNT(*) FROM menu_categories mc JOIN menus m ON mc.menu_id = m.id WHERE m.restaurant_id = ?) as categories,
+            (SELECT COUNT(*) FROM dishes di JOIN menu_categories mc ON di.category_id = mc.id JOIN menus m ON mc.menu_id = m.id WHERE m.restaurant_id = ?) as dishes,
+            (SELECT COUNT(*) FROM opening_hours WHERE restaurant_id = ?) as opening_hours,
+            (SELECT COUNT(*) FROM special_closures WHERE restaurant_id = ? AND is_active = 1) as active_closures,
+            (SELECT COUNT(*) FROM media_assets WHERE restaurant_id = ? AND is_active = 1) as media_assets
+    `).get(restaurant.id, restaurant.id, restaurant.id, restaurant.id, restaurant.id, restaurant.id);
+
+    res.json({ restaurant, domains, publishEvents, counts });
 });
 
 // --- Help Routes ---

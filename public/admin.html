@@ -6,6 +6,13 @@
     <title>Admin - Restiq</title>
     <link rel="stylesheet" href="css/style.css">
     <style>
+        .admin-shell { max-width: 1280px; margin: 0 auto; padding: 2rem; }
+        .admin-top { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+        .metric { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
+        .metric-label { color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.35rem; }
+        .metric-value { font-size: 1.6rem; font-weight: 800; }
+        .filter-bar { display: grid; grid-template-columns: minmax(220px, 1fr) 160px 180px auto; gap: 0.75rem; align-items: end; margin-bottom: 1rem; }
         .admin-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
         .admin-actions a, .admin-actions button { font-size: 0.8rem; padding: 0.4rem 0.6rem; text-decoration: none; border-radius: 4px; }
         .admin-actions a { background: var(--bg); color: var(--primary); border: 1px solid var(--border); }
@@ -13,130 +20,298 @@
         .status-ok { background: #dcfce7; color: #166534; }
         .status-warn { background: #fef3c7; color: #92400e; }
         .status-muted { background: #e2e8f0; color: #475569; }
-        .admin-note { margin-bottom: 1rem; color: var(--text-muted); }
+        .detail-panel { margin-top: 1.5rem; }
+        .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+        .detail-list { margin: 0; padding-left: 1rem; color: var(--text-muted); }
+        .table-wrap { padding: 0; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 1rem; text-align: left; vertical-align: top; }
+        thead { background: var(--bg); border-bottom: 1px solid var(--border); }
+        tbody tr { border-bottom: 1px solid var(--border); }
+        @media (max-width: 860px) {
+            .admin-shell { padding: 1rem; }
+            .admin-top { align-items: flex-start; flex-direction: column; }
+            .filter-bar { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <div class="container" style="max-width: 1000px;">
-        <div class="nav">
-            <strong>Restiq Platform Admin</strong>
+    <div class="admin-shell">
+        <div class="admin-top">
             <div>
+                <strong style="color: var(--primary);">Restiq Platform Admin</strong>
+                <h1 style="margin-top: 0.5rem;">Plattformübersicht</h1>
+                <p class="muted">Restaurants, Tarife, Domainstatus, Inhalte und Deploy-Vorbereitung.</p>
+            </div>
+            <div class="toolbar">
+                <button type="button" class="secondary" onclick="refreshAdmin()">Aktualisieren</button>
                 <a href="#" id="logoutBtn">Abmelden</a>
             </div>
         </div>
 
-        <h1>Alle Restaurants</h1>
-        <p class="admin-note">Operative Übersicht für Owner-Zustand, Tarif, vorbereiteten Free-Hostname und Cloudflare-Export.</p>
         <div id="alert" class="alert hidden"></div>
-        
-        <div class="card" style="padding: 0; overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <thead style="background: var(--bg); border-bottom: 1px solid var(--border);">
+        <div id="summaryGrid" class="summary-grid"></div>
+
+        <div class="card">
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label>Suche</label>
+                    <input type="search" id="searchInput" placeholder="Restaurant, Slug oder Owner">
+                </div>
+                <div class="form-group">
+                    <label>Tarif</label>
+                    <select id="planFilter">
+                        <option value="">Alle</option>
+                        <option value="free">Free</option>
+                        <option value="paid">Paid</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Free-Domain</label>
+                    <select id="domainFilter">
+                        <option value="">Alle</option>
+                        <option value="pending">Pending</option>
+                        <option value="active">Active</option>
+                        <option value="not_prepared">Nicht vorbereitet</option>
+                    </select>
+                </div>
+                <button type="button" class="secondary" onclick="resetFilters()">Zurücksetzen</button>
+            </div>
+        </div>
+
+        <div class="card table-wrap">
+            <table>
+                <thead>
                     <tr>
-                        <th style="padding: 1rem; text-align: left;">Restaurant Name</th>
-                        <th style="padding: 1rem; text-align: left;">Inhaber (Email)</th>
-                        <th style="padding: 1rem; text-align: left;">Tarif</th>
-                        <th style="padding: 1rem; text-align: left;">Deploy-Status</th>
-                        <th style="padding: 1rem; text-align: left;">Free Hostname</th>
-                        <th style="padding: 1rem; text-align: left;">Aktionen</th>
+                        <th>Restaurant</th>
+                        <th>Owner</th>
+                        <th>Tarif</th>
+                        <th>Inhalte</th>
+                        <th>Deploy</th>
+                        <th>Domains</th>
+                        <th>Aktionen</th>
                     </tr>
                 </thead>
-                <tbody id="restaurantTable">
-                    <!-- Rows will be injected here -->
-                </tbody>
+                <tbody id="restaurantTable"></tbody>
             </table>
         </div>
+
+        <div id="detailPanel" class="detail-panel"></div>
     </div>
 
     <script>
-        async function loadRestaurants() {
-            const res = await fetch('/api/admin/restaurants');
-            if (!res.ok) {
-                if (res.status === 403) alert('Zugriff verweigert (Admin-Rechte erforderlich)');
-                window.location.href = 'index.html';
-                return;
-            }
-            
-            const restaurants = await res.json();
-            const table = document.getElementById('restaurantTable');
-            table.innerHTML = '';
+        let restaurants = [];
+        let summary = null;
 
-            if (restaurants.length === 0) {
+        async function api(path, options = {}) {
+            const res = await fetch(path, {
+                ...options,
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(options.headers || {})
+                }
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || 'Request failed.');
+            return data;
+        }
+
+        async function refreshAdmin() {
+            try {
+                [summary, restaurants] = await Promise.all([
+                    api('/api/admin/summary'),
+                    api('/api/admin/restaurants')
+                ]);
+                renderSummary();
+                renderRestaurants();
+            } catch (error) {
+                if (error.message === 'Forbidden' || error.message === 'Request failed.') {
+                    window.location.href = 'index.html';
+                    return;
+                }
+                showAlert(error.message);
+            }
+        }
+
+        function renderSummary() {
+            const items = [
+                ['Restaurants', summary.restaurants],
+                ['Aktive Restaurants', summary.activeRestaurants],
+                ['Free / Paid', `${summary.freePlan} / ${summary.paidPlan}`],
+                ['Pending Domains', summary.pendingDomains],
+                ['Custom Domains', summary.customDomains],
+                ['Gerichte', summary.activeDishes],
+                ['Medien', summary.mediaAssets],
+                ['Deploy Events', summary.publishEvents]
+            ];
+
+            document.getElementById('summaryGrid').innerHTML = items.map(([label, value]) => `
+                <div class="metric">
+                    <div class="metric-label">${escapeHtml(label)}</div>
+                    <div class="metric-value">${escapeHtml(value)}</div>
+                </div>
+            `).join('');
+        }
+
+        function filteredRestaurants() {
+            const q = document.getElementById('searchInput').value.trim().toLowerCase();
+            const plan = document.getElementById('planFilter').value;
+            const domain = document.getElementById('domainFilter').value;
+
+            return restaurants.filter(r => {
+                const haystack = `${r.restaurant_name} ${r.public_slug_internal} ${r.owner_email}`.toLowerCase();
+                const domainStatus = r.free_domain_status || 'not_prepared';
+                return (!q || haystack.includes(q)) &&
+                    (!plan || r.current_plan === plan) &&
+                    (!domain || domainStatus === domain);
+            });
+        }
+
+        function renderRestaurants() {
+            const table = document.getElementById('restaurantTable');
+            const rows = filteredRestaurants();
+
+            if (rows.length === 0) {
                 table.innerHTML = `
                     <tr>
-                        <td colspan="6" style="padding: 2rem; text-align: center; color: var(--text-muted);">
-                            Noch keine Restaurants vorhanden.
+                        <td colspan="7" style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                            Keine passenden Restaurants gefunden.
                         </td>
                     </tr>
                 `;
                 return;
             }
 
-            for (const r of restaurants) {
-                const domainStatus = r.free_domain_status || 'nicht vorbereitet';
-                const domainClass = domainStatus === 'active' ? 'status-ok' : (domainStatus === 'pending' ? 'status-warn' : 'status-muted');
+            table.innerHTML = rows.map(r => {
+                const freeDomainStatus = r.free_domain_status || 'not_prepared';
+                const domainClass = freeDomainStatus === 'active' ? 'status-ok' : (freeDomainStatus === 'pending' ? 'status-warn' : 'status-muted');
                 const deployClass = r.last_publish_status === 'success' ? 'status-ok' : 'status-muted';
-                const tr = document.createElement('tr');
-                tr.style.borderBottom = '1px solid var(--border)';
-                tr.innerHTML = `
-                    <td style="padding: 1rem;">
-                        <strong>${escapeHtml(r.restaurant_name)}</strong><br>
-                        <small style="color:var(--text-muted)">${escapeHtml(r.public_slug_internal)}</small><br>
-                        <small style="color:var(--text-muted)">Template: ${escapeHtml(r.template_key || 'free_default')}</small>
-                    </td>
-                    <td style="padding: 1rem;">
-                        ${escapeHtml(r.owner_email)}<br>
-                        <small style="color: ${r.is_active ? 'var(--success)' : 'var(--error)'}">${r.is_active ? 'Aktiv' : 'Inaktiv'}</small>
-                    </td>
-                    <td style="padding: 1rem;"><span class="badge badge-${escapeHtml(r.current_plan)}">${escapeHtml(r.current_plan.toUpperCase())}</span></td>
-                    <td style="padding: 1rem;">
-                        <span class="status-pill ${deployClass}">${r.last_publish_status ? escapeHtml(r.last_publish_status) : 'nicht vorbereitet'}</span><br>
-                        <small style="color:var(--text-muted)">${r.last_publish_status ? 'letztes Cloudflare-Event' : 'kein Cloudflare-Event'}</small>
-                    </td>
-                    <td style="padding: 1rem;">
-                        <span class="status-pill ${domainClass}">${escapeHtml(domainStatus)}</span><br>
-                        <small style="color:var(--text-muted)">${escapeHtml(r.free_hostname || `${r.public_slug_internal}-restiq.pages.dev`)}</small>
-                    </td>
-                    <td style="padding: 1rem;">
-                        <div class="admin-actions">
-                            <a href="/preview/${r.id}" target="_blank">Preview</a>
-                            <button type="button" onclick="prepareCf(${r.id}, this)">CF vorbereiten</button>
-                        </div>
-                    </td>
+                return `
+                    <tr>
+                        <td>
+                            <strong>${escapeHtml(r.restaurant_name)}</strong><br>
+                            <small class="muted">${escapeHtml(r.public_slug_internal)}</small><br>
+                            <small class="muted">Template: ${escapeHtml(r.template_key || 'free_default')}</small>
+                        </td>
+                        <td>
+                            ${escapeHtml(r.owner_email)}<br>
+                            <small style="color: ${r.is_active ? 'var(--success)' : 'var(--error)'}">${r.is_active ? 'Restaurant aktiv' : 'Restaurant inaktiv'}</small>
+                        </td>
+                        <td><span class="badge badge-${escapeHtml(r.current_plan)}">${escapeHtml(String(r.current_plan).toUpperCase())}</span></td>
+                        <td>
+                            <small>Kategorien: ${escapeHtml(r.category_count || 0)}</small><br>
+                            <small>Gerichte: ${escapeHtml(r.dish_count || 0)}</small><br>
+                            <small>Medien: ${escapeHtml(r.media_count || 0)}</small><br>
+                            <small>Schließzeiten: ${escapeHtml(r.closure_count || 0)}</small>
+                        </td>
+                        <td>
+                            <span class="status-pill ${deployClass}">${r.last_publish_status ? escapeHtml(r.last_publish_status) : 'nicht vorbereitet'}</span><br>
+                            <small class="muted">${r.last_publish_at ? escapeHtml(r.last_publish_at) : 'kein Event'}</small>
+                        </td>
+                        <td>
+                            <span class="status-pill ${domainClass}">${escapeHtml(freeDomainStatus)}</span><br>
+                            <small class="muted">${escapeHtml(r.free_hostname || `${r.public_slug_internal}-restiq.pages.dev`)}</small>
+                            ${r.custom_hostname ? `<br><small class="muted">Custom: ${escapeHtml(r.custom_hostname)} (${escapeHtml(r.custom_domain_status)})</small>` : ''}
+                        </td>
+                        <td>
+                            <div class="admin-actions">
+                                <a href="/preview/${r.id}" target="_blank">Preview</a>
+                                <button type="button" onclick="showRestaurantDetail(${r.id})">Details</button>
+                                <button type="button" onclick="prepareCf(${r.id}, this)">CF vorbereiten</button>
+                            </div>
+                        </td>
+                    </tr>
                 `;
-                table.appendChild(tr);
+            }).join('');
+        }
+
+        async function showRestaurantDetail(restaurantId) {
+            try {
+                const detail = await api(`/api/admin/restaurants/${restaurantId}`);
+                const r = detail.restaurant;
+                document.getElementById('detailPanel').innerHTML = `
+                    <div class="card">
+                        <div class="section-header">
+                            <div>
+                                <h2>${escapeHtml(r.restaurant_name)}</h2>
+                                <p class="muted">${escapeHtml(r.owner_email)} · ${escapeHtml(r.public_slug_internal)}</p>
+                            </div>
+                            <button type="button" class="secondary" onclick="document.getElementById('detailPanel').innerHTML = ''">Schließen</button>
+                        </div>
+                        <div class="detail-grid">
+                            <div>
+                                <h3>Status</h3>
+                                <p><span class="status-pill status-muted">${escapeHtml(r.current_plan)}</span></p>
+                                <p class="muted">Restaurant: ${r.is_active ? 'aktiv' : 'inaktiv'}<br>Owner: ${r.owner_is_active ? 'aktiv' : 'inaktiv'}</p>
+                            </div>
+                            <div>
+                                <h3>Inhalte</h3>
+                                <p class="muted">
+                                    Menüs: ${escapeHtml(detail.counts.menus)}<br>
+                                    Kategorien: ${escapeHtml(detail.counts.categories)}<br>
+                                    Gerichte: ${escapeHtml(detail.counts.dishes)}<br>
+                                    Medien: ${escapeHtml(detail.counts.media_assets)}<br>
+                                    Öffnungszeiten: ${escapeHtml(detail.counts.opening_hours)}
+                                </p>
+                            </div>
+                            <div>
+                                <h3>Design / SEO</h3>
+                                <p class="muted">
+                                    Template: ${escapeHtml(r.template_key)}<br>
+                                    Menü: ${escapeHtml(r.menu_layout)}<br>
+                                    SEO Titel: ${escapeHtml(r.seo_title || 'nicht gesetzt')}
+                                </p>
+                            </div>
+                            <div>
+                                <h3>Domains</h3>
+                                ${detail.domains.length ? `<ul class="detail-list">${detail.domains.map(domain => `<li>${escapeHtml(domain.hostname)} · ${escapeHtml(domain.domain_type)} · ${escapeHtml(domain.status)}</li>`).join('')}</ul>` : '<p class="muted">Keine Domains.</p>'}
+                            </div>
+                        </div>
+                        <h3 style="margin-top: 1.5rem;">Letzte Deploy-Events</h3>
+                        ${detail.publishEvents.length ? `<ul class="detail-list">${detail.publishEvents.map(event => `<li>${escapeHtml(event.created_at)} · ${escapeHtml(event.status)} · ${escapeHtml(event.target_hostname)}${event.message ? ` · ${escapeHtml(event.message)}` : ''}</li>`).join('')}</ul>` : '<p class="muted">Keine Deploy-Events.</p>'}
+                    </div>
+                `;
+            } catch (error) {
+                showAlert(error.message);
             }
         }
 
         async function prepareCf(restaurantId, button) {
-            const alertBox = document.getElementById('alert');
             const originalText = button.textContent;
             button.disabled = true;
             button.textContent = 'Bereite vor...';
-            alertBox.className = 'alert hidden';
+            hideAlert();
 
             try {
-                const res = await fetch(`/api/admin/cf-prepare/${restaurantId}`, { method: 'POST' });
-                const data = await res.json();
-
-                if (res.ok) {
-                    alertBox.innerHTML = `Cloudflare-Export vorbereitet: <code>${escapeHtml(data.targetHostname)}</code>`;
-                    alertBox.className = 'alert alert-success';
-                    alertBox.classList.remove('hidden');
-                    await loadRestaurants();
-                } else {
-                    alertBox.textContent = data.error || 'Cloudflare-Vorbereitung fehlgeschlagen.';
-                    alertBox.className = 'alert alert-error';
-                    alertBox.classList.remove('hidden');
-                }
+                const data = await api(`/api/admin/cf-prepare/${restaurantId}`, { method: 'POST' });
+                showAlert(`Cloudflare-Export vorbereitet: ${data.targetHostname}`, 'success');
+                await refreshAdmin();
             } catch (error) {
-                alertBox.textContent = 'Serverfehler bei der Cloudflare-Vorbereitung.';
-                alertBox.className = 'alert alert-error';
-                alertBox.classList.remove('hidden');
+                showAlert(error.message || 'Cloudflare-Vorbereitung fehlgeschlagen.');
             } finally {
                 button.disabled = false;
                 button.textContent = originalText;
             }
+        }
+
+        function resetFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('planFilter').value = '';
+            document.getElementById('domainFilter').value = '';
+            renderRestaurants();
+        }
+
+        function showAlert(message, type = 'error') {
+            const alertBox = document.getElementById('alert');
+            alertBox.textContent = message;
+            alertBox.className = `alert alert-${type === 'success' ? 'success' : 'error'}`;
+            alertBox.classList.remove('hidden');
+        }
+
+        function hideAlert() {
+            const alertBox = document.getElementById('alert');
+            alertBox.className = 'alert hidden';
+            alertBox.textContent = '';
         }
 
         function escapeHtml(value) {
@@ -148,13 +323,17 @@
                 .replace(/'/g, '&#39;');
         }
 
+        document.getElementById('searchInput').addEventListener('input', renderRestaurants);
+        document.getElementById('planFilter').addEventListener('change', renderRestaurants);
+        document.getElementById('domainFilter').addEventListener('change', renderRestaurants);
+
         document.getElementById('logoutBtn').addEventListener('click', async (e) => {
             e.preventDefault();
             await fetch('/api/auth/logout', { method: 'POST' });
             window.location.href = 'index.html';
         });
 
-        loadRestaurants();
+        refreshAdmin();
     </script>
 </body>
 </html>

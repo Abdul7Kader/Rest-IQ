@@ -51,6 +51,11 @@ Bereitet die Integration externer Partner vor.
 - **Anbietertypen**: `registrar` (für Kauf), `free_hosting` (für Cloudflare-Integration), `both`.
 - **Domainstatus**: Eine kostenlose Restiq-Adresse wird als `free_generated` gespeichert. Eigene Domains werden als `custom` mit `pending` gespeichert, bis eine spätere DNS-/Cloudflare-Prüfung die Inhaberschaft bestätigt.
 
+### 4.3 Plattform-Admin
+Der Plattform-Admin sieht operative Kennzahlen und Detaildaten je Restaurant.
+- **Summary**: Restaurantanzahl, Tarifverteilung, Domainstatus, Inhaltsumfang, Medien und Deploy-Events.
+- **Restaurantdetails**: Owner, Tarif, Inhaltcounts, Domains und letzte Publish-Events.
+- **Sicherheit**: Admin-APIs sind ausschließlich für `platform_admin` freigegeben; Owner erhalten keinen Zugriff.
 
 ## 5. Menü-Struktur
 
