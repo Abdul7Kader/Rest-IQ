@@ -41,24 +41,32 @@ if (process.env.TRUST_PROXY === '1') {
 }
 
 app.use(express.json({ limit: '100kb' }));
+
+function contentSecurityPolicyForPath(requestPath) {
+    const legacyInlineScriptPages = new Set(['/admin.html', '/dashboard.html']);
+    const scriptSrc = legacyInlineScriptPages.has(requestPath)
+        ? "script-src 'self' 'unsafe-inline'"
+        : "script-src 'self'";
+
+    return [
+        "default-src 'self'",
+        scriptSrc,
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' https: data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'"
+    ].join('; ');
+}
+
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-    res.setHeader(
-        'Content-Security-Policy',
-        [
-            "default-src 'self'",
-            "script-src 'self' 'unsafe-inline'",
-            "style-src 'self' 'unsafe-inline'",
-            "img-src 'self' https: data:",
-            "connect-src 'self'",
-            "base-uri 'self'",
-            "form-action 'self'",
-            "frame-ancestors 'none'"
-        ].join('; ')
-    );
+    res.setHeader('Content-Security-Policy', contentSecurityPolicyForPath(req.path));
     next();
 });
 app.use(express.static('public'));

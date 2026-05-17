@@ -245,38 +245,6 @@
         </footer>
     </div>
 
-    <script>
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const alert = document.getElementById('alert');
-            alert.classList.add('hidden');
-
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-
-            try {
-                const res = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
-                });
-
-                const data = await res.json();
-                if (data.success) {
-                    if (data.user.role === 'platform_admin') {
-                        window.location.href = 'admin.html';
-                    } else {
-                        window.location.href = 'dashboard.html';
-                    }
-                } else {
-                    alert.textContent = data.error || 'Login fehlgeschlagen.';
-                    alert.classList.remove('hidden');
-                }
-            } catch (err) {
-                alert.textContent = 'Serverfehler.';
-                alert.classList.remove('hidden');
-            }
-        });
-    </script>
+    <script src="/js/login-page.js"></script>
 </body>
 </html>

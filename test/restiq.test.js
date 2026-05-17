@@ -31,6 +31,7 @@ function request(method, path, { cookie, body, headers } = {}) {
                 resolve({
                     status: res.statusCode,
                     body: parsed,
+                    headers: res.headers,
                     cookie: (res.headers['set-cookie'] || [])[0]?.split(';')[0] || cookie || null
                 });
             });
@@ -235,4 +236,18 @@ test('auth rate limit also blocks rotating email attempts from one IP', async ()
 
     assert.equal(last.status, 429);
     assert.equal(last.body.error, 'Too many attempts. Please try again later.');
+});
+
+test('public pages use stricter script CSP while legacy admin shells remain compatible', async () => {
+    const index = await request('GET', '/index.html');
+    const register = await request('GET', '/register.html');
+    const dashboard = await request('GET', '/dashboard.html');
+
+    assert.equal(index.status, 200);
+    assert.equal(register.status, 200);
+    assert.match(index.headers['content-security-policy'], /script-src 'self'(;|$)/);
+    assert.doesNotMatch(index.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
+    assert.doesNotMatch(register.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
+
+    assert.match(dashboard.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
 });
