@@ -12,7 +12,11 @@ const app = express();
 const port = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 const SESSION_COOKIE_NAME = 'restiq.sid';
-const SESSION_SECRET = process.env.SESSION_SECRET || 'restiq-fallback-secret';
+const SESSION_SECRET = process.env.SESSION_SECRET || (
+    isProduction
+        ? null
+        : crypto.randomBytes(32).toString('hex')
+);
 const IMAGE_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 const IMAGE_UPLOAD_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 const CSRF_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/register']);
@@ -23,8 +27,12 @@ const PLATFORM_SETTING_KEYS = new Set([
     'quality_review_required'
 ]);
 
-if (isProduction && SESSION_SECRET === 'restiq-fallback-secret') {
+if (!SESSION_SECRET) {
     throw new Error('SESSION_SECRET must be set in production.');
+}
+
+if (!process.env.SESSION_SECRET && !isProduction) {
+    console.warn('SESSION_SECRET is not set. Using a temporary random development secret for this process.');
 }
 
 app.disable('x-powered-by');
@@ -88,22 +96,30 @@ function isAcceptablePassword(password) {
     );
 }
 
-function createRateLimiter({ windowMs, max }) {
+function createRateLimiter({ windowMs, max, ipMax = max * 3, emailMax = max * 2 }) {
     const attempts = new Map();
 
     return (req, res, next) => {
-        const key = `${req.ip}:${normalizeEmail(req.body && req.body.email)}`;
+        const email = normalizeEmail(req.body && req.body.email);
+        const keys = [
+            { key: `combo:${req.ip}:${email}`, max },
+            { key: `ip:${req.ip}`, max: ipMax },
+            ...(email ? [{ key: `email:${email}`, max: emailMax }] : [])
+        ];
         const now = Date.now();
-        const current = attempts.get(key);
-        const entry = current && current.resetAt > now
-            ? current
-            : { count: 0, resetAt: now + windowMs };
+        const entries = keys.map(bucket => {
+            const current = attempts.get(bucket.key);
+            const entry = current && current.resetAt > now
+                ? current
+                : { count: 0, resetAt: now + windowMs };
+            entry.count += 1;
+            attempts.set(bucket.key, entry);
+            return { ...bucket, entry };
+        });
 
-        entry.count += 1;
-        attempts.set(key, entry);
-
-        if (entry.count > max) {
-            const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+        const blocked = entries.find(bucket => bucket.entry.count > bucket.max);
+        if (blocked) {
+            const retryAfter = Math.ceil((blocked.entry.resetAt - now) / 1000);
             res.setHeader('Retry-After', String(retryAfter));
             return res.status(429).json({ error: 'Too many attempts. Please try again later.' });
         }
@@ -1862,6 +1878,11 @@ app.delete('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req
 function getPreviewData(restaurantId, { previewMode = true } = {}) {
     const r = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(restaurantId);
     const c = db.prepare('SELECT * FROM site_configs WHERE restaurant_id = ?').get(restaurantId);
+    if (!r || !c) {
+        const error = new Error('PREVIEW_DATA_NOT_FOUND');
+        error.statusCode = 404;
+        throw error;
+    }
     const hours = db.prepare('SELECT * FROM opening_hours WHERE restaurant_id = ? ORDER BY weekday ASC').all(restaurantId);
     const today = new Date().toISOString().slice(0, 10);
     const specialClosures = db.prepare(`
@@ -1976,15 +1997,25 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
 app.get('/api/preview', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     const restaurant = db.prepare('SELECT id FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
-    res.json(getPreviewData(restaurant.id));
+    try {
+        res.json(getPreviewData(restaurant.id));
+    } catch (error) {
+        if (error.statusCode === 404) return res.status(404).json({ error: 'Preview data not found.' });
+        throw error;
+    }
 });
 
 app.get('/api/admin/preview/:restaurantId', isAuthenticated, hasRole('platform_admin'), (req, res) => {
-    res.json(getPreviewData(req.params.restaurantId));
+    try {
+        res.json(getPreviewData(req.params.restaurantId));
+    } catch (error) {
+        if (error.statusCode === 404) return res.status(404).json({ error: 'Preview data not found.' });
+        throw error;
+    }
 });
 
 // Dynamic Preview Page Logic
-app.get('/preview', isAuthenticated, (req, res) => {
+app.get('/preview', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'preview.html'));
 });
 

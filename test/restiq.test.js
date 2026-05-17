@@ -71,7 +71,7 @@ async function csrf(cookie) {
 test.before(async () => {
     serverProcess = spawn(process.execPath, ['server.js'], {
         cwd: `${__dirname}/..`,
-        env: { ...process.env, PORT: String(PORT), SESSION_SECRET: 'test-session-secret' },
+        env: { ...process.env, PORT: String(PORT), SESSION_SECRET: 'test-session-secret', TRUST_PROXY: '1' },
         stdio: 'ignore',
         windowsHide: true
     });
@@ -208,4 +208,31 @@ test('admin plan updates are logged for restaurants', async () => {
         LIMIT 1
     `).get(restaurantId);
     assert.deepEqual(log, { old_plan: 'free', new_plan: 'paid' });
+});
+
+test('preview routes return consistent role and missing-data responses', async () => {
+    const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
+    const adminCookie = await login('admin@restiq.app', 'admin123');
+
+    const ownerPreviewShell = await request('GET', '/preview', { cookie: ownerCookie });
+    assert.equal(ownerPreviewShell.status, 200);
+
+    const adminPreviewShell = await request('GET', '/preview', { cookie: adminCookie });
+    assert.equal(adminPreviewShell.status, 403);
+
+    const missingAdminPreview = await request('GET', '/api/admin/preview/999999', { cookie: adminCookie });
+    assert.equal(missingAdminPreview.status, 404);
+});
+
+test('auth rate limit also blocks rotating email attempts from one IP', async () => {
+    let last;
+    for (let i = 0; i < 25; i += 1) {
+        last = await request('POST', '/api/auth/login', {
+            headers: { 'X-Forwarded-For': '203.0.113.77' },
+            body: { email: `missing-${i}@restiq.local`, password: 'WrongPass123' }
+        });
+    }
+
+    assert.equal(last.status, 429);
+    assert.equal(last.body.error, 'Too many attempts. Please try again later.');
 });
