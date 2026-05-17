@@ -148,3 +148,17 @@ test('admin can read platform controls', async () => {
     assert.equal(settings.status, 200);
     assert.equal(settings.body.default_ad_label, 'Werbeplatz');
 });
+
+test('owner onboarding exposes required progress and optional closure step', async () => {
+    const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
+    const guide = await request('GET', '/api/restaurant/onboarding', { cookie: ownerCookie });
+
+    assert.equal(guide.status, 200);
+    assert.equal(typeof guide.body.progressPercent, 'number');
+    assert.ok(guide.body.progressPercent >= 0);
+    assert.ok(guide.body.progressPercent <= 100);
+    assert.ok(guide.body.total >= 1);
+    assert.ok(guide.body.steps.some(step => step.key === 'closures' && step.required === false));
+    assert.ok(guide.body.steps.some(step => step.key === 'preview' && step.required === true));
+    assert.ok(guide.body.next.label);
+});

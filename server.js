@@ -1065,40 +1065,96 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
         WHERE m.restaurant_id = ? AND m.is_active = 1
     `).get(restaurant.id);
 
-    const hasBasics = Boolean(
-        restaurant.restaurant_name &&
-        restaurant.short_description &&
-        restaurant.contact_email &&
-        restaurant.contact_phone &&
-        restaurant.street &&
-        restaurant.city
-    );
+    const missingBasics = [
+        ['short_description', 'Kurzbeschreibung'],
+        ['contact_email', 'Kontakt-E-Mail'],
+        ['contact_phone', 'Telefon'],
+        ['street', 'Straße'],
+        ['city', 'Stadt']
+    ].filter(([key]) => !restaurant[key]).map(([, label]) => label);
+    const hasBasics = Boolean(restaurant.restaurant_name && missingBasics.length === 0);
     const hasDesign = Boolean(restaurant.hero_title || restaurant.hero_subtitle || restaurant.about_text || restaurant.logo_image_url || restaurant.hero_image_url);
     const hasMenu = menuStats.categories > 0 && menuStats.dishes > 0;
     const hasHours = openingHoursCount >= 7;
     const hasClosures = closuresCount > 0;
+    const readyForPreview = hasBasics && hasHours && hasMenu && hasDesign;
     const cfPrepared = restaurant.free_domain_status === 'pending' || restaurant.free_domain_status === 'active';
 
     const steps = [
-        { key: 'basics', label: 'Grunddaten vervollständigen', done: hasBasics, targetTab: 'base' },
-        { key: 'hours', label: 'Öffnungszeiten prüfen', done: hasHours, targetTab: 'hours' },
-        { key: 'closures', label: 'Urlaub und Schließzeiten prüfen', done: hasClosures, targetTab: 'closures' },
-        { key: 'menu', label: 'Speisekarte mit Kategorien und Gerichten pflegen', done: hasMenu, targetTab: 'menu' },
-        { key: 'design', label: 'Design, Hero und Beschreibung prüfen', done: hasDesign, targetTab: 'design' },
-        { key: 'preview', label: 'Vorschau öffnen und Seite kontrollieren', done: false, url: '/preview' },
-        { key: 'cloudflare', label: 'Cloudflare-Export vorbereiten', done: cfPrepared, action: 'cf-prepare' }
+        {
+            key: 'basics',
+            label: 'Restaurantdaten vervollständigen',
+            detail: hasBasics ? 'Name, Beschreibung, Kontakt und Adresse sind gepflegt.' : `Fehlt noch: ${missingBasics.join(', ')}.`,
+            done: hasBasics,
+            required: true,
+            targetTab: 'base'
+        },
+        {
+            key: 'hours',
+            label: 'Öffnungszeiten prüfen',
+            detail: hasHours ? 'Für alle sieben Wochentage liegen Öffnungszeiten oder Geschlossen-Markierungen vor.' : `${openingHoursCount}/7 Wochentage sind gespeichert.`,
+            done: hasHours,
+            required: true,
+            targetTab: 'hours'
+        },
+        {
+            key: 'menu',
+            label: 'Speisekarte aufbauen',
+            detail: `${menuStats.categories || 0} Kategorien, ${menuStats.dishes || 0} Gerichte.`,
+            done: hasMenu,
+            required: true,
+            targetTab: 'menu'
+        },
+        {
+            key: 'design',
+            label: 'Design und Hero pflegen',
+            detail: hasDesign ? 'Hero, Beschreibung oder Bilder sind gesetzt.' : 'Hero-Titel, About-Text oder Bilder fehlen noch.',
+            done: hasDesign,
+            required: true,
+            targetTab: 'design'
+        },
+        {
+            key: 'closures',
+            label: 'Urlaub & Schließzeiten ergänzen',
+            detail: hasClosures ? `${closuresCount} aktive Sonderschließungen eingetragen.` : 'Optional: nur nötig, wenn Urlaub, Feiertage oder Sonderzeiten anstehen.',
+            done: hasClosures,
+            required: false,
+            targetTab: 'closures'
+        },
+        {
+            key: 'preview',
+            label: 'Vorschau prüfen',
+            detail: readyForPreview ? 'Die wichtigsten Inhalte sind bereit für eine Sichtprüfung.' : 'Erst die Pflichtschritte abschließen, dann Vorschau prüfen.',
+            done: readyForPreview,
+            required: true,
+            url: '/preview'
+        },
+        {
+            key: 'cloudflare',
+            label: 'Online-Veröffentlichung vorbereiten',
+            detail: cfPrepared ? 'Der Cloudflare-Export wurde vorbereitet oder ist bereits aktiv.' : 'Erzeugt den technischen Export für den späteren Pages-Deploy.',
+            done: cfPrepared,
+            required: true,
+            action: 'cf-prepare'
+        }
     ];
 
-    const completed = steps.filter(step => step.done).length;
-    const next = steps.find(step => !step.done) || {
+    const requiredSteps = steps.filter(step => step.required);
+    const completed = requiredSteps.filter(step => step.done).length;
+    const optionalCompleted = steps.filter(step => !step.required && step.done).length;
+    const next = requiredSteps.find(step => !step.done) || {
         key: 'complete',
         label: 'Alle Schritte geprüft',
+        detail: 'Die Restaurantseite ist vollständig vorbereitet.',
         done: true
     };
 
     res.json({
         completed,
-        total: steps.length,
+        total: requiredSteps.length,
+        optionalCompleted,
+        optionalTotal: steps.length - requiredSteps.length,
+        progressPercent: Math.round((completed / requiredSteps.length) * 100),
         next,
         steps
     });

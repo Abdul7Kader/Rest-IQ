@@ -50,6 +50,10 @@
         .media-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
         .media-picker-button { border: 1px solid var(--border); background: white; border-radius: 8px; padding: 0; overflow: hidden; cursor: pointer; text-align: left; }
         .media-picker-button img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+        .progress-track { height: 10px; background: #e2e8f0; border-radius: 999px; overflow: hidden; margin: 1rem 0; }
+        .progress-fill { height: 100%; background: var(--primary); border-radius: inherit; transition: width 0.2s; }
+        .onboarding-step { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: center; border-top: 1px solid var(--border); padding-top: 0.85rem; }
+        .onboarding-title { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-weight: 700; }
         .muted { color: var(--text-muted); }
         .meta-line { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
@@ -63,6 +67,7 @@
             .category-head { grid-template-columns: 32px 1fr; }
             .menu-item { grid-template-columns: 1fr; }
             .upload-zone { grid-template-columns: 1fr; }
+            .onboarding-step { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -584,15 +589,25 @@
         async function loadOnboarding() {
             const guide = await api('/api/restaurant/onboarding');
             const nextLabel = guide.next ? guide.next.label : 'Alle Schritte geprüft';
+            const progress = Math.max(0, Math.min(100, Number(guide.progressPercent || 0)));
             document.getElementById('onboardingPanel').innerHTML = `
                 <div class="section-header" style="margin-bottom: 1rem;">
                     <div><h2>Geführter Start</h2><p class="muted">Nächster Schritt: ${escapeHtml(nextLabel)}</p></div>
-                    <span class="status-pill ${guide.completed === guide.total ? 'status-ok' : 'status-warn'}">${guide.completed}/${guide.total}</span>
+                    <span class="status-pill ${guide.completed === guide.total ? 'status-ok' : 'status-warn'}">${escapeHtml(progress)}%</span>
                 </div>
+                <div class="progress-track" aria-label="Onboarding-Fortschritt"><div class="progress-fill" style="width: ${escapeAttr(progress)}%;"></div></div>
+                <p class="muted">${escapeHtml(guide.completed)}/${escapeHtml(guide.total)} Pflichtschritte erledigt${guide.optionalTotal ? ` · ${escapeHtml(guide.optionalCompleted)}/${escapeHtml(guide.optionalTotal)} optionale Schritte` : ''}</p>
                 <div style="display: grid; gap: 0.75rem;">
                     ${guide.steps.map(step => `
-                        <div style="display: flex; justify-content: space-between; gap: 1rem; align-items: center; border-top: 1px solid var(--border); padding-top: 0.75rem;">
-                            <div><span class="status-pill ${step.done ? 'status-ok' : 'status-muted'}">${step.done ? 'erledigt' : 'offen'}</span> <span>${escapeHtml(step.label)}</span></div>
+                        <div class="onboarding-step">
+                            <div>
+                                <div class="onboarding-title">
+                                    <span class="status-pill ${step.done ? 'status-ok' : 'status-muted'}">${step.done ? 'erledigt' : 'offen'}</span>
+                                    <span class="status-pill ${step.required ? 'status-warn' : 'status-muted'}">${step.required ? 'Pflicht' : 'Optional'}</span>
+                                    <span>${escapeHtml(step.label)}</span>
+                                </div>
+                                <p class="meta-line">${escapeHtml(step.detail || '')}</p>
+                            </div>
                             ${renderOnboardingAction(step)}
                         </div>
                     `).join('')}
