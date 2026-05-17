@@ -12,14 +12,34 @@
         .choice-card input { width: auto; margin-right: 0.5rem; }
         .choice-title { font-weight: 700; margin-bottom: 0.35rem; }
         .choice-meta { color: var(--text-muted); font-size: 0.9rem; }
+        .signup-layout { max-width: 1120px; margin: 2rem auto; padding: 0 1rem; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 1rem; align-items: start; }
+        .step-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem; margin: 1.25rem 0 2rem; }
+        .step-pill { border: 1px solid var(--border); background: #f8fafc; border-radius: 8px; padding: 0.75rem; font-size: 0.85rem; color: var(--text-muted); }
+        .step-pill strong { display: block; color: var(--text); }
+        .side-panel { position: sticky; top: 1rem; }
+        .summary-list { display: grid; gap: 0.75rem; margin-top: 1rem; }
+        .summary-item { border-left: 3px solid var(--primary); padding-left: 0.75rem; }
+        .summary-item strong { display: block; }
+        .security-note { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; border-radius: 8px; padding: 0.85rem; font-size: 0.9rem; margin-top: 1rem; }
         .hidden { display: none !important; }
+        @media (max-width: 900px) {
+            .signup-layout { grid-template-columns: 1fr; margin-top: 1rem; }
+            .side-panel { position: static; }
+            .step-strip { grid-template-columns: 1fr 1fr; }
+        }
     </style>
 </head>
 <body>
-    <div class="container" style="max-width: 760px; margin-top: 3rem;">
+    <div class="signup-layout">
         <div class="card">
             <h1>Konto erstellen</h1>
-            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Legen Sie Ihren Zugang und das erste Restaurantprofil an.</p>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Legen Sie Ihren Zugang, den Tarif, die Domain-Option und das erste Restaurantprofil an. Danach landen Sie direkt im Owner-Admin.</p>
+            <div class="step-strip" aria-label="Registrierungsablauf">
+                <div class="step-pill"><strong>1. Zugang</strong>Login-Daten</div>
+                <div class="step-pill"><strong>2. Restaurant</strong>Basisdaten</div>
+                <div class="step-pill"><strong>3. Tarif</strong>Free oder werbefrei</div>
+                <div class="step-pill"><strong>4. Domain</strong>RestIQ oder eigene Domain</div>
+            </div>
             
             <div id="alert" class="alert alert-error hidden"></div>
             <div id="success" class="alert alert-success hidden">Konto erstellt! <a href="index.html">Zum Login</a></div>
@@ -32,10 +52,16 @@
                         <input type="email" id="email" name="email" required placeholder="name@beispiel.de">
                     </div>
                     <div class="form-group">
-                        <label for="password">Passwort (min. 8 Zeichen)</label>
+                        <label for="password">Passwort</label>
                         <input type="password" id="password" name="password" required minlength="8" placeholder="••••••••">
+                        <p class="choice-meta">8 bis 128 Zeichen, mindestens ein Buchstabe und eine Zahl.</p>
+                    </div>
+                    <div class="form-group">
+                        <label for="password_confirm">Passwort wiederholen</label>
+                        <input type="password" id="password_confirm" name="password_confirm" required minlength="8" placeholder="••••••••">
                     </div>
                 </div>
+                <div class="security-note">Passwörter werden nicht im Klartext gespeichert. RestIQ speichert nur den bcrypt-Hash und schützt Login/Registrierung mit Rate-Limits.</div>
 
                 <h2 style="margin-top: 2rem;">Restaurant</h2>
                 <div class="form-group">
@@ -110,7 +136,7 @@
                     </label>
                 </div>
                 <div id="domainBuyHint" class="alert alert-success hidden" style="margin-top: 1rem;">
-                    Domainkauf erfolgt extern. Beispiel-Partner: <a href="https://namecheap.com?aff=restiq" target="_blank" rel="noopener">Namecheap öffnen</a>
+                    Domainkauf erfolgt extern. <a id="domainProviderLink" href="#" target="_blank" rel="noopener">Partner öffnen</a>
                 </div>
                 <div id="customDomainGroup" class="form-group hidden" style="margin-top: 1rem;">
                     <label for="custom_domain">Eigene Domain</label>
@@ -123,9 +149,35 @@
                 Bereits ein Konto? <a href="index.html">Anmelden</a>
             </p>
         </div>
+        <aside class="card side-panel">
+            <h2>Was danach passiert</h2>
+            <div class="summary-list">
+                <div class="summary-item"><strong>Owner-Admin</strong>Sie bearbeiten Restaurantdaten, Öffnungszeiten, Speisekarte, Bilder und Design.</div>
+                <div class="summary-item"><strong>Vorschau</strong>Sie prüfen die Restaurantseite intern, bevor ein Deploy vorbereitet wird.</div>
+                <div class="summary-item"><strong>Domain</strong>Die kostenlose RestIQ-Adresse wird vorbereitet. Eigene Domains bleiben bis zur DNS-Prüfung pending.</div>
+                <div class="summary-item"><strong>Tarif</strong>Free zeigt Werbung und Spendenhinweis; paid ist fachlich vorbereitet, Zahlung folgt später.</div>
+            </div>
+        </aside>
     </div>
 
     <script>
+        let domainProvider = null;
+
+        async function loadDomainProvider() {
+            try {
+                const res = await fetch('/api/public/domain-providers');
+                const providers = await res.json();
+                domainProvider = providers.find(provider => provider.provider_type === 'registrar' || provider.provider_type === 'both');
+                if (domainProvider) {
+                    const link = document.getElementById('domainProviderLink');
+                    link.href = domainProvider.affiliate_base_url || domainProvider.website_url;
+                    link.textContent = `${domainProvider.provider_name} öffnen`;
+                }
+            } catch (error) {
+                document.getElementById('domainBuyHint').textContent = 'Domainkauf erfolgt extern. Der Partner-Link ist aktuell nicht verfügbar.';
+            }
+        }
+
         document.querySelectorAll('[name="domain_choice"]').forEach(input => {
             input.addEventListener('change', () => {
                 const value = document.querySelector('[name="domain_choice"]:checked').value;
@@ -143,6 +195,12 @@
 
             const formData = new FormData(e.target);
             const payload = Object.fromEntries(formData.entries());
+            if (payload.password !== payload.password_confirm) {
+                alert.textContent = 'Die Passwörter stimmen nicht überein.';
+                alert.classList.remove('hidden');
+                return;
+            }
+            delete payload.password_confirm;
             if (!payload.contact_email) payload.contact_email = payload.email;
 
             try {
@@ -164,6 +222,8 @@
                 alert.classList.remove('hidden');
             }
         });
+
+        loadDomainProvider();
     </script>
 </body>
 </html>

@@ -71,6 +71,16 @@ function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function isAcceptablePassword(password) {
+    return (
+        typeof password === 'string' &&
+        password.length >= 8 &&
+        password.length <= 128 &&
+        /[A-Za-z]/.test(password) &&
+        /\d/.test(password)
+    );
+}
+
 function createRateLimiter({ windowMs, max }) {
     const attempts = new Map();
 
@@ -487,7 +497,7 @@ const DEFAULT_HELP_ARTICLES = [
             '',
             'Für jedes Gericht sollten Name, Preis und Beschreibung gepflegt sein. Zutaten und Allergene sind eigene Felder, damit sie später besser dargestellt oder gefiltert werden können.',
             '',
-            'Nutzen Sie Bilder nur, wenn sie wirklich zum Gericht passen und zuverlässig über eine URL erreichbar sind.'
+            'Nutzen Sie Bilder nur, wenn sie wirklich zum Gericht passen. Restaurantbilder werden im Owner-Admin hochgeladen und in der Mediathek verwaltet.'
         ].join('\n')
     },
     {
@@ -526,6 +536,48 @@ function ensureDefaultHelpArticles() {
     transaction();
 }
 
+function ensureDefaultDomainProviders() {
+    const upsert = db.prepare(`
+        INSERT INTO domain_providers (
+            provider_name, provider_type, website_url, affiliate_base_url,
+            supports_free_domains, supports_paid_domains, is_active, sort_order
+        )
+        VALUES (@provider_name, @provider_type, @website_url, @affiliate_base_url,
+            @supports_free_domains, @supports_paid_domains, 1, @sort_order)
+        ON CONFLICT(provider_name) DO UPDATE SET
+            provider_type = excluded.provider_type,
+            website_url = excluded.website_url,
+            affiliate_base_url = excluded.affiliate_base_url,
+            supports_free_domains = excluded.supports_free_domains,
+            supports_paid_domains = excluded.supports_paid_domains,
+            is_active = 1,
+            sort_order = excluded.sort_order,
+            updated_at = CURRENT_TIMESTAMP
+    `);
+
+    const transaction = db.transaction(() => {
+        upsert.run({
+            provider_name: 'Cloudflare',
+            provider_type: 'free_hosting',
+            website_url: 'https://cloudflare.com',
+            affiliate_base_url: null,
+            supports_free_domains: 1,
+            supports_paid_domains: 0,
+            sort_order: 0
+        });
+        upsert.run({
+            provider_name: 'Namecheap',
+            provider_type: 'registrar',
+            website_url: 'https://namecheap.com',
+            affiliate_base_url: 'https://namecheap.com?aff=restiq',
+            supports_free_domains: 0,
+            supports_paid_domains: 1,
+            sort_order: 10
+        });
+    });
+    transaction();
+}
+
 function ensureApplicationTables() {
     db.exec(`
         CREATE TABLE IF NOT EXISTS special_closures (
@@ -557,6 +609,19 @@ function ensureApplicationTables() {
         );
         CREATE INDEX IF NOT EXISTS idx_media_assets_restaurant_id ON media_assets(restaurant_id);
         CREATE INDEX IF NOT EXISTS idx_media_assets_active ON media_assets(is_active, created_at);
+        CREATE TABLE IF NOT EXISTS domain_providers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            provider_name TEXT UNIQUE NOT NULL,
+            provider_type TEXT NOT NULL CHECK(provider_type IN ('registrar', 'free_hosting', 'both')),
+            website_url TEXT NOT NULL,
+            affiliate_base_url TEXT,
+            supports_free_domains INTEGER NOT NULL DEFAULT 0,
+            supports_paid_domains INTEGER NOT NULL DEFAULT 1,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
     `);
 
     const addColumnIfMissing = (tableName, columnName, definition) => {
@@ -581,11 +646,8 @@ app.post('/api/auth/register', authRateLimit, async (req, res) => {
     const email = normalizeEmail(body.email);
     const { password } = body;
 
-    if (!isValidEmail(email) || !password || password.length < 8) {
-        return res.status(400).json({ error: 'Invalid email or password (min 8 characters).' });
-    }
-    if (password.length > 128) {
-        return res.status(400).json({ error: 'Password is too long.' });
+    if (!isValidEmail(email) || !isAcceptablePassword(password)) {
+        return res.status(400).json({ error: 'Invalid email or password. Password must be 8-128 characters and include letters and numbers.' });
     }
 
     try {
@@ -662,6 +724,18 @@ app.get('/api/auth/me', (req, res) => {
     } else {
         res.status(401).json({ error: 'Not authenticated' });
     }
+});
+
+app.get('/api/public/domain-providers', (req, res) => {
+    const providers = db.prepare(`
+        SELECT provider_name, provider_type, website_url, affiliate_base_url,
+               supports_free_domains, supports_paid_domains
+        FROM domain_providers
+        WHERE is_active = 1
+        ORDER BY sort_order ASC, provider_name ASC
+    `).all();
+
+    res.json(providers);
 });
 
 // --- Restaurant Routes (Expanded) ---
@@ -2030,6 +2104,7 @@ app.get('/api/help/articles/:id', (req, res) => {
 
 ensureApplicationTables();
 ensureDefaultHelpArticles();
+ensureDefaultDomainProviders();
 
 app.listen(port, () => {
     console.log(`Restiq running at http://localhost:${port}`);

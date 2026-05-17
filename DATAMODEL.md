@@ -20,6 +20,7 @@ Die Plattform unterscheidet zwischen der **kostenlosen Stufe (free)** und der **
   - `free`: `ads_enabled = 1`, `donation_hint_enabled = 1`
   - `paid`: `ads_enabled = 0`, `donation_hint_enabled = 0` (Werbefreie Darstellung)
 - **Onboarding**: Bei Registrierung kann der Restaurantinhaber den gewünschten Tarif und die Domain-Variante wählen. Die Wahl wird in `site_configs.current_plan` und `site_domains` gespeichert; echte Zahlung und DNS-Verifikation sind spätere Integrationsschritte.
+- **Öffentlicher Einstieg**: Die Marketing- und Registrierungsstrecke führt ohne Adminzugriff durch Zugang, Restaurantdaten, Tarifwahl und Domainwahl. Nach erfolgreicher Registrierung wird eine Owner-Session erzeugt und der Nutzer in den Owner-Admin geleitet.
 
 ## 3. Fachliche Regeln & Constraints
 
@@ -93,6 +94,7 @@ Die Speisekarte ist hierarchisch aufgebaut:
 ## 7. Authentifizierung & Sessions
 
 - **Passwort-Hashing**: Wird über `bcryptjs` mit einem Salt-Faktor von 12 realisiert.
+- **Passwortregeln**: Neue Passwörter müssen 8 bis 128 Zeichen lang sein und mindestens einen Buchstaben sowie eine Zahl enthalten. Klartextpasswörter werden nicht gespeichert.
 - **Session-Management**: Nutzt `express-session` mit einem persistenten SQLite-Store in der Tabelle `sessions`.
 - **Session-Schutz**: Session-IDs werden nicht im Klartext in der UI angezeigt, Cookies sind `httpOnly`, `sameSite=lax` und in Produktion `secure`. Beim Login und bei der Registrierung wird die Session neu erzeugt, um Session-Fixation zu vermeiden.
 - **Ablauf & Wartung**: Sessions speichern einen Ablaufzeitpunkt (`expires`) und abgelaufene Einträge werden regelmäßig bereinigt. Für sehr hohe Last kann der Store später zentral im `server.js` gegen Redis oder einen anderen produktiven Session-Store getauscht werden.
