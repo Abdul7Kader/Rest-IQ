@@ -907,6 +907,8 @@ app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), (req,
         logo_image_url: normalizeImageUrl,
         hero_image_url: normalizeImageUrl,
         footer_note: value => trimText(value, 300),
+        seo_title: value => normalizeNullableText(value, 70),
+        seo_description: value => normalizeNullableText(value, 180),
         accent_color: normalizeCssColor,
         primary_language: value => trimText(value, 10) || 'de',
         template_key: normalizeTemplateKey,
@@ -1581,6 +1583,10 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
             aboutText: c.about_text,
             logoUrl: c.logo_image_url,
             footerNote: c.footer_note,
+            seo: {
+                title: c.seo_title || c.hero_title || r.restaurant_name,
+                description: c.seo_description || r.short_description
+            },
             accentColor: c.accent_color || '#2563eb',
             language: c.primary_language || 'de',
             plan: c.current_plan,
@@ -1628,6 +1634,8 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
         },
         meta: {
             previewMode, // true für Dashboard-Preview, false für Publish/CF-Export
+            seoTitle: c.seo_title || c.hero_title || r.restaurant_name,
+            seoDescription: c.seo_description || r.short_description,
             renderedAt: new Date().toISOString()
         }
     };

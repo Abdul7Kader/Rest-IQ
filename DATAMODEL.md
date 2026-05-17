@@ -71,6 +71,7 @@ Die Speisekarte ist hierarchisch aufgebaut:
 - **Mediathek**: `media_assets` katalogisiert hochgeladene Bilder mit Restaurantbezug, URL, Kontext, MIME-Type und Dateigröße. Owner sehen und verwalten nur die eigene Mediathek.
 - **Löschen**: Bilder können nur gelöscht werden, wenn sie nicht mehr als Logo, Hero-, Kategorie- oder Gerichtbild verwendet werden.
 - **Designsteuerung**: `site_configs` enthält zusätzliche Owner-Optionen für `font_family`, `heading_style`, `menu_layout` und `dish_image_style`.
+- **SEO-Steuerung**: `site_configs.seo_title` und `site_configs.seo_description` können vom Owner gepflegt werden und werden im ViewModel sowie im statischen Export als Meta-/Open-Graph-Daten genutzt.
 - **Export**: Interne Upload-Bilder werden beim Cloudflare-Export in den statischen Exportordner kopiert, damit Preview und späterer Pages-Export dieselben Bilddaten nutzen.
 
 ## 5.2 Öffnungszeiten & Sonderschließungen

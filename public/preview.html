@@ -41,6 +41,7 @@
                 const res = await fetch(apiUrl);
                 if (!res.ok) throw new Error('Vorschau-Daten konnten nicht geladen werden.');
                 const data = await res.json();
+                document.title = `Vorschau - ${(data.meta && data.meta.seoTitle) || data.restaurant.name}`;
                 
                 const container = document.getElementById('renderTarget');
                 window.RestiqRenderer.render(data, container);
