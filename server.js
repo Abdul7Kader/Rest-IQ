@@ -398,6 +398,34 @@ function getOwnerRestaurant(userId) {
     return db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(userId);
 }
 
+function getPlanCapabilities(plan) {
+    const isPaid = plan === 'paid';
+    return {
+        plan,
+        adsEnabled: !isPaid,
+        donationHintEnabled: !isPaid,
+        customDomainAllowed: true,
+        paidFeatureAccess: isPaid,
+        availableTemplates: isPaid
+            ? ['free_default', 'free_classic']
+            : ['free_default', 'free_classic'],
+        summary: isPaid
+            ? 'Werbefreier Auftritt ist fachlich aktiviert. Zahlung und automatische Domainprüfung folgen später.'
+            : 'Kostenloser Auftritt mit RestIQ-Hinweis, Werbeplätzen und Spendenhinweis.'
+    };
+}
+
+function getDomainStatusLabel(status) {
+    return {
+        not_prepared: 'Nicht vorbereitet',
+        not_configured: 'Nicht eingerichtet',
+        pending: 'Prüfung ausstehend',
+        active: 'Aktiv',
+        failed: 'Fehler',
+        disabled: 'Deaktiviert'
+    }[status] || 'Unklar';
+}
+
 function sendValidationError(res, error) {
     const messages = {
         INVALID_URL: 'Only valid http/https URLs are allowed.',
@@ -992,6 +1020,11 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         ORDER BY sort_order ASC, id ASC
         LIMIT 1
     `).get();
+    const domainAffiliateNote = db.prepare(`
+        SELECT setting_value
+        FROM platform_settings
+        WHERE setting_key = 'domain_affiliate_note'
+    `).get();
     let nextStep = 'Vorschau pruefen';
     if (restaurant.free_domain_status !== 'pending' && restaurant.free_domain_status !== 'active') {
         nextStep = 'Cloudflare-Export vorbereiten';
@@ -1018,15 +1051,25 @@ app.get('/api/restaurant/status', isAuthenticated, hasRole('restaurant_owner'), 
         restaurantName: restaurant.restaurant_name,
         slug: restaurant.public_slug_internal,
         plan: restaurant.current_plan,
+        planCapabilities: getPlanCapabilities(restaurant.current_plan),
         template: restaurant.template_key,
         pageStatus: pageStatusKey,
         pageStatusLabel,
         expectedFreeHostname,
         freeHostname: restaurant.free_hostname || expectedFreeHostname,
         freeDomainStatus: restaurant.free_domain_status || 'not_prepared',
+        freeDomainStatusLabel: getDomainStatusLabel(restaurant.free_domain_status || 'not_prepared'),
         customDomain: customDomain ? customDomain.hostname : null,
         customDomainStatus: customDomain ? customDomain.status : 'not_configured',
+        customDomainStatusLabel: getDomainStatusLabel(customDomain ? customDomain.status : 'not_configured'),
+        domainVerification: customDomain ? {
+            method: 'dns_txt',
+            status: customDomain.status,
+            statusLabel: getDomainStatusLabel(customDomain.status),
+            instruction: 'DNS-Verifikation wird später über Cloudflare automatisiert. Bis dahin bleibt die eigene Domain im Status Prüfung ausstehend.'
+        } : null,
         domainProvider: registrar || null,
+        domainAffiliateNote: domainAffiliateNote ? domainAffiliateNote.setting_value : null,
         lastPublishStatus: restaurant.last_publish_status,
         lastPublishAt: restaurant.last_publish_at,
         lastPublishMessage: restaurant.last_publish_message,
@@ -2095,13 +2138,16 @@ app.post('/api/restaurant/domain', isAuthenticated, hasRole('restaurant_owner'),
 
     try {
         transaction();
+        const customStatus = hostname ? 'pending' : 'not_configured';
         res.json({
             success: true,
             domainChoice,
             customDomain: hostname,
+            customDomainStatus: customStatus,
+            customDomainStatusLabel: getDomainStatusLabel(customStatus),
             note: hostname
-                ? 'Custom domain saved as pending. DNS ownership verification will be implemented in the Cloudflare automation step.'
-                : 'Free Restiq domain selected.'
+                ? 'Eigene Domain gespeichert. DNS-Eigentumsprüfung folgt später über die Cloudflare-Automation.'
+                : 'Kostenlose RestIQ-Adresse ausgewählt.'
         });
     } catch (error) {
         res.status(500).json({ error: 'Domain update failed.' });

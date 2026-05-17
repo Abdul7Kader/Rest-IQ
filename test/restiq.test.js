@@ -162,3 +162,50 @@ test('owner onboarding exposes required progress and optional closure step', asy
     assert.ok(guide.body.steps.some(step => step.key === 'preview' && step.required === true));
     assert.ok(guide.body.next.label);
 });
+
+test('owner status exposes plan capabilities and domain labels', async () => {
+    const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
+    const status = await request('GET', '/api/restaurant/status', { cookie: ownerCookie });
+
+    assert.equal(status.status, 200);
+    assert.equal(status.body.planCapabilities.plan, status.body.plan);
+    assert.equal(typeof status.body.planCapabilities.adsEnabled, 'boolean');
+    assert.ok(status.body.freeDomainStatusLabel);
+    assert.ok(status.body.customDomainStatusLabel);
+    assert.ok(status.body.domainAffiliateNote);
+});
+
+test('admin plan updates are logged for restaurants', async () => {
+    const email = `test-plan-${Date.now()}@restiq.local`;
+    const ownerRegister = await request('POST', '/api/auth/register', {
+        body: {
+            email,
+            password: 'StrongPass123',
+            restaurant_name: 'Plan Test Restaurant',
+            plan_choice: 'free',
+            domain_choice: 'restiq_free'
+        }
+    });
+    assert.equal(ownerRegister.status, 200);
+
+    const adminCookie = await login('admin@restiq.app', 'admin123');
+    const token = await csrf(adminCookie);
+    const restaurantId = ownerRegister.body.restaurant.id;
+
+    const update = await request('PATCH', `/api/admin/restaurants/${restaurantId}/plan`, {
+        cookie: adminCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: { current_plan: 'paid' }
+    });
+    assert.equal(update.status, 200);
+    assert.equal(update.body.current_plan, 'paid');
+
+    const log = db.prepare(`
+        SELECT old_plan, new_plan
+        FROM plan_change_log
+        WHERE restaurant_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    `).get(restaurantId);
+    assert.deepEqual(log, { old_plan: 'free', new_plan: 'paid' });
+});

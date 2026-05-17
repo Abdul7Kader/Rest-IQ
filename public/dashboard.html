@@ -54,6 +54,8 @@
         .progress-fill { height: 100%; background: var(--primary); border-radius: inherit; transition: width 0.2s; }
         .onboarding-step { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: center; border-top: 1px solid var(--border); padding-top: 0.85rem; }
         .onboarding-title { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-weight: 700; }
+        .compact-list { display: grid; gap: 0.75rem; margin: 1rem 0; }
+        .compact-item { border-top: 1px solid var(--border); padding-top: 0.75rem; }
         .muted { color: var(--text-muted); }
         .meta-line { font-size: 0.85rem; color: var(--text-muted); margin-top: 0.25rem; }
         .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
@@ -1138,21 +1140,28 @@
         function renderPlanPanel() {
             if (!currentStatus) return;
             const paidEnabled = currentStatus.plan === 'paid';
+            const capabilities = currentStatus.planCapabilities || {};
             document.getElementById('planPanel').innerHTML = `
                 <div class="card">
                     <h3>Aktueller Tarif</h3>
-                    <p><span class="status-pill ${paidEnabled ? 'status-ok' : 'status-muted'}">${escapeHtml(currentStatus.plan)}</span></p>
-                    <p class="muted">${paidEnabled ? 'Werbung und Spendenhinweis sind für Paid-Seiten deaktiviert.' : 'Free-Seiten enthalten Restiq-Branding, Werbeplätze und Spendenhinweis.'}</p>
+                    <p><span class="status-pill ${paidEnabled ? 'status-ok' : 'status-muted'}">${escapeHtml(currentStatus.plan.toUpperCase())}</span></p>
+                    <p class="muted">${escapeHtml(capabilities.summary || (paidEnabled ? 'Werbefreier Auftritt vorbereitet.' : 'Free-Seiten enthalten Restiq-Branding, Werbeplätze und Spendenhinweis.'))}</p>
+                    <div class="compact-list">
+                        <div class="compact-item"><strong>Werbung</strong><br><span class="muted">${capabilities.adsEnabled ? 'Aktiv in der kostenlosen Stufe' : 'Deaktiviert im Paid-Tarif'}</span></div>
+                        <div class="compact-item"><strong>Spendenhinweis</strong><br><span class="muted">${capabilities.donationHintEnabled ? 'Aktiv in der kostenlosen Stufe' : 'Deaktiviert im Paid-Tarif'}</span></div>
+                        <div class="compact-item"><strong>Eigene Domain</strong><br><span class="muted">${capabilities.customDomainAllowed ? 'Vorbereitet, DNS-Prüfung folgt später' : 'Nicht verfügbar'}</span></div>
+                    </div>
                     <button type="button" class="secondary" disabled>Upgrade vorbereiten</button>
                 </div>
                 <div class="card">
                     <h3>Kostenlose Domain</h3>
                     <p>${escapeHtml(currentStatus.freeHostname)}</p>
-                    <p><span class="status-pill ${currentStatus.freeDomainStatus === 'active' ? 'status-ok' : 'status-warn'}">${escapeHtml(currentStatus.freeDomainStatus)}</span></p>
+                    <p><span class="status-pill ${currentStatus.freeDomainStatus === 'active' ? 'status-ok' : (currentStatus.freeDomainStatus === 'pending' ? 'status-warn' : 'status-muted')}">${escapeHtml(currentStatus.freeDomainStatusLabel || currentStatus.freeDomainStatus)}</span></p>
+                    <p class="muted">Diese Adresse wird von RestIQ vorbereitet und später über den Deploy-Prozess online geschaltet.</p>
                 </div>
                 <div class="card">
                     <h3>Eigene Domain</h3>
-                    <p class="muted">Status: <span class="status-pill ${currentStatus.customDomain ? 'status-warn' : 'status-muted'}">${escapeHtml(currentStatus.customDomainStatus)}</span></p>
+                    <p class="muted">Status: <span class="status-pill ${currentStatus.customDomainStatus === 'active' ? 'status-ok' : (currentStatus.customDomain ? 'status-warn' : 'status-muted')}">${escapeHtml(currentStatus.customDomainStatusLabel || currentStatus.customDomainStatus)}</span></p>
                     <form id="domainForm">
                         <div class="form-group">
                             <label>Domain-Auswahl</label>
@@ -1169,7 +1178,9 @@
                         <button type="submit" class="secondary">Domainwunsch speichern</button>
                     </form>
                     ${currentStatus.domainProvider ? `<p class="muted" style="margin-top: 1rem;">Domain extern kaufen: <a href="${escapeAttr(currentStatus.domainProvider.affiliate_base_url || currentStatus.domainProvider.website_url)}" target="_blank" rel="noopener">${escapeHtml(currentStatus.domainProvider.provider_name)}</a></p>` : ''}
-                    <p class="muted" style="margin-top: 1rem;">Eigentumsprüfung folgt später über DNS/Cloudflare. Ein Passwort für Domains reicht technisch nicht aus.</p>
+                    ${currentStatus.domainAffiliateNote ? `<p class="muted">${escapeHtml(currentStatus.domainAffiliateNote)}</p>` : ''}
+                    ${currentStatus.domainVerification ? `<div class="compact-item" style="margin-top: 1rem;"><strong>Verifikation vorbereitet</strong><br><span class="muted">${escapeHtml(currentStatus.domainVerification.instruction)}</span></div>` : ''}
+                    <p class="muted" style="margin-top: 1rem;">Ein Domain-Passwort reicht technisch nicht aus. Die spätere Prüfung erfolgt über DNS/Cloudflare.</p>
                 </div>
             `;
             document.getElementById('domainForm').addEventListener('submit', saveDomainChoice);
