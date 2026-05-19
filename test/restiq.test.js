@@ -238,7 +238,7 @@ test('auth rate limit also blocks rotating email attempts from one IP', async ()
     assert.equal(last.body.error, 'Too many attempts. Please try again later.');
 });
 
-test('public and admin pages use stricter script CSP while dashboard remains compatible', async () => {
+test('public, owner and admin pages use stricter script CSP', async () => {
     const index = await request('GET', '/index.html');
     const register = await request('GET', '/register.html');
     const admin = await request('GET', '/admin.html');
@@ -251,6 +251,5 @@ test('public and admin pages use stricter script CSP while dashboard remains com
     assert.doesNotMatch(index.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
     assert.doesNotMatch(register.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
     assert.doesNotMatch(admin.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
-
-    assert.match(dashboard.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
+    assert.doesNotMatch(dashboard.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
 });

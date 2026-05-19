@@ -43,10 +43,7 @@ if (process.env.TRUST_PROXY === '1') {
 app.use(express.json({ limit: '100kb' }));
 
 function contentSecurityPolicyForPath(requestPath) {
-    const legacyInlineScriptPages = new Set(['/dashboard.html']);
-    const scriptSrc = legacyInlineScriptPages.has(requestPath)
-        ? "script-src 'self' 'unsafe-inline'"
-        : "script-src 'self'";
+    const scriptSrc = "script-src 'self'";
 
     return [
         "default-src 'self'",
