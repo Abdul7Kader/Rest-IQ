@@ -356,6 +356,7 @@ test('image uploads require real allowed image signatures and matching MIME type
     });
     assert.equal(upload.status, 200);
     assert.equal(upload.body.mime, 'image/png');
+    assert.match(upload.body.url, /^\/uploads\/restaurants\/\d+\/\d+-security-test-[a-f0-9]{16}\.png$/);
 
     const removeUpload = await request('DELETE', `/api/media-assets/${upload.body.id}`, {
         cookie: ownerCookie,

@@ -2,11 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
 const db = require('./lib/db');
 const { hashPassword, verifyPassword, isAuthenticated, hasRole } = require('./lib/auth');
 const SQLiteSessionStore = require('./lib/session-store');
+const storage = require('./lib/storage');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1458,14 +1458,14 @@ app.post(
         }
 
         const extension = imageExtension(detectedMime);
-        const uploadDir = path.join(__dirname, 'public', 'uploads', 'restaurants', String(restaurant.id));
-        fs.mkdirSync(uploadDir, { recursive: true });
-
         const safeContext = slugify(req.get('X-Upload-Context') || 'image').slice(0, 32) || 'image';
         const fileName = `${Date.now()}-${safeContext}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
-        const targetPath = path.join(uploadDir, fileName);
-        fs.writeFileSync(targetPath, body, { flag: 'wx' });
-        const url = `/uploads/restaurants/${restaurant.id}/${fileName}`;
+        const storedFile = storage.saveRestaurantImage({
+            restaurantId: restaurant.id,
+            fileName,
+            buffer: body
+        });
+        const url = storedFile.url;
         const originalName = trimText(req.get('X-Upload-Name') || '', 180) || null;
         const mediaInfo = db.prepare(`
             INSERT INTO media_assets (restaurant_id, url, original_name, context, mime_type, size_bytes)
@@ -1528,14 +1528,7 @@ app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner')
     }
 
     db.prepare('UPDATE media_assets SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND restaurant_id = ?').run(asset.id, restaurant.id);
-
-    const relativePath = asset.url.replace(/^\/+/, '');
-    if (relativePath.startsWith(`uploads/restaurants/${restaurant.id}/`) && !relativePath.includes('..')) {
-        const filePath = path.join(__dirname, 'public', relativePath);
-        if (fs.existsSync(filePath)) {
-            fs.rmSync(filePath, { force: true });
-        }
-    }
+    storage.deleteRestaurantAsset({ restaurantId: restaurant.id, url: asset.url });
 
     res.json({ success: true });
 });
