@@ -1435,7 +1435,7 @@ app.post(
     hasRole('restaurant_owner'),
     expensiveActionRateLimit,
     express.raw({ type: IMAGE_UPLOAD_TYPES, limit: IMAGE_UPLOAD_MAX_BYTES }),
-    (req, res) => {
+    async (req, res) => {
         const restaurant = getOwnerRestaurant(req.session.userId);
         if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
@@ -1460,10 +1460,11 @@ app.post(
         const extension = imageExtension(detectedMime);
         const safeContext = slugify(req.get('X-Upload-Context') || 'image').slice(0, 32) || 'image';
         const fileName = `${Date.now()}-${safeContext}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
-        const storedFile = storage.saveRestaurantImage({
+        const storedFile = await storage.saveRestaurantImage({
             restaurantId: restaurant.id,
             fileName,
-            buffer: body
+            buffer: body,
+            contentType: detectedMime
         });
         const url = storedFile.url;
         const originalName = trimText(req.get('X-Upload-Name') || '', 180) || null;
@@ -1496,7 +1497,7 @@ app.get('/api/media-assets', isAuthenticated, hasRole('restaurant_owner'), (req,
     res.json(assets);
 });
 
-app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner'), async (req, res) => {
     const restaurant = getOwnerRestaurant(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
@@ -1528,7 +1529,7 @@ app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner')
     }
 
     db.prepare('UPDATE media_assets SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND restaurant_id = ?').run(asset.id, restaurant.id);
-    storage.deleteRestaurantAsset({ restaurantId: restaurant.id, url: asset.url });
+    await storage.deleteRestaurantAsset({ restaurantId: restaurant.id, url: asset.url });
 
     res.json({ success: true });
 });

@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const http = require('node:http');
 const db = require('../lib/db');
+const storage = require('../lib/storage');
 
 const PORT = 3555;
 const BASE = `http://localhost:${PORT}`;
@@ -337,6 +338,43 @@ test('public, owner and admin pages use stricter script CSP', async () => {
     assert.doesNotMatch(register.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
     assert.doesNotMatch(admin.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
     assert.doesNotMatch(dashboard.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
+});
+
+test('storage can select R2 driver and issue signed save/delete requests with mocked fetch', async () => {
+    const calls = [];
+    const r2Storage = storage.createStorage({
+        env: {
+            RESTIQ_STORAGE_DRIVER: 'r2',
+            R2_ENDPOINT: 'https://example-account.r2.cloudflarestorage.com',
+            R2_BUCKET: 'restiq-assets',
+            R2_ACCESS_KEY_ID: 'test-key',
+            R2_SECRET_ACCESS_KEY: 'test-secret',
+            R2_PUBLIC_BASE_URL: 'https://assets.example.test'
+        },
+        now: () => new Date('2026-01-02T03:04:05.000Z'),
+        fetchImpl: async (url, options) => {
+            calls.push({ url, options });
+            return { ok: true, status: 200, text: async () => '' };
+        }
+    });
+
+    const saved = await r2Storage.saveRestaurantImage({
+        restaurantId: 7,
+        fileName: 'menu.png',
+        buffer: Buffer.from('image-bytes'),
+        contentType: 'image/png'
+    });
+    assert.equal(saved.url, 'https://assets.example.test/uploads/restaurants/7/menu.png');
+
+    const deleted = await r2Storage.deleteRestaurantAsset({ restaurantId: 7, url: saved.url });
+    assert.equal(deleted, true);
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].options.method, 'PUT');
+    assert.equal(calls[0].options.headers['content-type'], 'image/png');
+    assert.equal(calls[0].options.headers['x-amz-date'], '20260102T030405Z');
+    assert.match(calls[0].options.headers.authorization, /Credential=test-key\/20260102\/auto\/s3\/aws4_request/);
+    assert.match(calls[0].url, /^https:\/\/example-account\.r2\.cloudflarestorage\.com\/restiq-assets\/uploads\/restaurants\/7\/menu\.png$/);
+    assert.equal(calls[1].options.method, 'DELETE');
 });
 
 test('image uploads require real allowed image signatures and matching MIME type', async () => {
