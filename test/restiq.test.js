@@ -10,8 +10,8 @@ const storage = require('../lib/storage');
 const PORT = 3555;
 const BASE = `http://localhost:${PORT}`;
 const ONE_PIXEL_PNG = Buffer.from(
-    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000000020001e221bc330000000049454e44ae426082',
-    'hex'
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=',
+    'base64'
 );
 let serverProcess;
 
@@ -406,6 +406,12 @@ test('image uploads require real allowed image signatures and matching MIME type
     assert.equal(upload.status, 200);
     assert.equal(upload.body.mime, 'image/png');
     assert.match(upload.body.url, /^\/uploads\/restaurants\/\d+\/\d+-security-test-[a-f0-9]{16}\.png$/);
+    assert.notEqual(upload.body.size, ONE_PIXEL_PNG.length);
+
+    const storedImagePath = path.join(__dirname, '..', 'public', upload.body.url.replace(/^\/+/, ''));
+    const storedImage = fs.readFileSync(storedImagePath);
+    assert.equal(storedImage.length, upload.body.size);
+    assert.notDeepEqual(storedImage, ONE_PIXEL_PNG);
 
     const activeMetadata = db.prepare(`
         SELECT asset_kind, storage_key, url, mime_type, size_bytes, is_active
@@ -416,7 +422,7 @@ test('image uploads require real allowed image signatures and matching MIME type
     assert.equal(activeMetadata.storage_key, upload.body.url.replace(/^\/+/, ''));
     assert.equal(activeMetadata.url, upload.body.url);
     assert.equal(activeMetadata.mime_type, 'image/png');
-    assert.equal(activeMetadata.size_bytes, ONE_PIXEL_PNG.length);
+    assert.equal(activeMetadata.size_bytes, storedImage.length);
     assert.equal(activeMetadata.is_active, 1);
 
     const setHeroImage = await request('PATCH', '/api/restaurant', {

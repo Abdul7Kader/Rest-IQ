@@ -7,6 +7,7 @@ const db = require('./lib/db');
 const { hashPassword, verifyPassword, isAuthenticated, hasRole } = require('./lib/auth');
 const SQLiteSessionStore = require('./lib/session-store');
 const storage = require('./lib/storage');
+const { normalizeRestaurantImage } = require('./lib/image-normalizer');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1461,28 +1462,35 @@ app.post(
             return sendValidationError(res, new Error('INVALID_IMAGE_TYPE'));
         }
 
-        const extension = imageExtension(detectedMime);
+        let normalizedImage;
+        try {
+            normalizedImage = await normalizeRestaurantImage(body);
+        } catch (error) {
+            return sendValidationError(res, error);
+        }
+
+        const extension = imageExtension(normalizedImage.mimeType);
         const safeContext = slugify(req.get('X-Upload-Context') || 'image').slice(0, 32) || 'image';
         const fileName = `${Date.now()}-${safeContext}-${crypto.randomBytes(8).toString('hex')}.${extension}`;
         const storedFile = await storage.saveRestaurantImage({
             restaurantId: restaurant.id,
             fileName,
-            buffer: body,
-            contentType: detectedMime
+            buffer: normalizedImage.buffer,
+            contentType: normalizedImage.mimeType
         });
         const url = storedFile.url;
         const originalName = trimText(req.get('X-Upload-Name') || '', 180) || null;
         const mediaInfo = db.prepare(`
             INSERT INTO media_assets (restaurant_id, asset_kind, storage_key, url, original_name, context, mime_type, size_bytes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(restaurant.id, 'restaurant_image', storedFile.storageKey, url, originalName, safeContext, detectedMime, body.length);
+        `).run(restaurant.id, 'restaurant_image', storedFile.storageKey, url, originalName, safeContext, normalizedImage.mimeType, normalizedImage.buffer.length);
 
         res.json({
             success: true,
             id: mediaInfo.lastInsertRowid,
             url,
-            mime: detectedMime,
-            size: body.length
+            mime: normalizedImage.mimeType,
+            size: normalizedImage.buffer.length
         });
     }
 );
