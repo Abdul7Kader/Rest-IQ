@@ -8,6 +8,7 @@
     "db:init": "node db/init.js",
     "cf:serve": "npx serve cloudflare-export",
     "cf:serve:slug": "npx serve cloudflare-export/trattoria-mario",
+    "storage:r2:smoke": "node scripts/r2-storage-smoke.js",
     "test": "node --test test/*.test.js"
   },
   "keywords": [],
