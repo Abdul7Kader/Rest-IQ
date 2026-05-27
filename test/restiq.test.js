@@ -115,6 +115,30 @@ test('auth stores only hashes and rejects weak registration passwords', async ()
     assert.notEqual(user.password_hash, 'StrongPass123');
 });
 
+test('central auth JSON validation rejects unknown fields and invalid types', async () => {
+    const loginWithUnknownField = await request('POST', '/api/auth/login', {
+        headers: { 'X-Forwarded-For': '203.0.113.88' },
+        body: {
+            email: 'missing-validation@restiq.local',
+            password: 'WrongPass123',
+            role: 'platform_admin'
+        }
+    });
+    assert.equal(loginWithUnknownField.status, 400);
+    assert.equal(loginWithUnknownField.body.error, 'Invalid request body.');
+
+    const registerWithInvalidType = await request('POST', '/api/auth/register', {
+        headers: { 'X-Forwarded-For': '203.0.113.89' },
+        body: {
+            email: 'test-invalid-type@restiq.local',
+            password: 'StrongPass123',
+            restaurant_name: ['Invalid Restaurant']
+        }
+    });
+    assert.equal(registerWithInvalidType.status, 400);
+    assert.equal(registerWithInvalidType.body.error, 'Invalid request body.');
+});
+
 test('owner cannot access admin APIs', async () => {
     const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
     const res = await request('GET', '/api/admin/summary', { cookie: ownerCookie });
@@ -200,6 +224,37 @@ test('owner status exposes plan capabilities and domain labels', async () => {
     assert.ok(status.body.freeDomainStatusLabel);
     assert.ok(status.body.customDomainStatusLabel);
     assert.ok(status.body.domainAffiliateNote);
+});
+
+test('restaurant patch JSON validation allows valid updates and rejects unknown fields', async () => {
+    const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
+    const token = await csrf(ownerCookie);
+    const current = db.prepare(`
+        SELECT s.footer_note
+        FROM site_configs s
+        JOIN restaurants r ON s.restaurant_id = r.id
+        JOIN users u ON r.owner_user_id = u.id
+        WHERE u.email = ?
+    `).get('mario@trattoria-mario.de');
+    const currentFooterNote = current?.footer_note || '';
+
+    const validUpdate = await request('PATCH', '/api/restaurant', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: { footer_note: currentFooterNote }
+    });
+    assert.equal(validUpdate.status, 200);
+
+    const invalidUpdate = await request('PATCH', '/api/restaurant', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: {
+            footer_note: currentFooterNote,
+            unsafe_extra_field: '<script>alert(1)</script>'
+        }
+    });
+    assert.equal(invalidUpdate.status, 400);
+    assert.equal(invalidUpdate.body.error, 'Invalid request body.');
 });
 
 test('admin plan updates are logged for restaurants', async () => {

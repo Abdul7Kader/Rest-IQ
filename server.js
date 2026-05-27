@@ -141,6 +141,52 @@ function createRateLimiter({ windowMs, max, ipMax = max * 3, emailMax = max * 2 
     };
 }
 
+function isPlainObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validateJsonBody(schema) {
+    const allowedFields = new Set(Object.keys(schema));
+
+    return (req, res, next) => {
+        const body = req.body;
+
+        if (!isPlainObject(body)) {
+            return res.status(400).json({ error: 'Invalid request body.' });
+        }
+
+        for (const field of Object.keys(body)) {
+            if (!allowedFields.has(field)) {
+                return res.status(400).json({ error: 'Invalid request body.' });
+            }
+        }
+
+        for (const [field, rule] of Object.entries(schema)) {
+            const value = body[field];
+
+            if (rule.required && (value === undefined || value === null || value === '')) {
+                return res.status(400).json({ error: 'Invalid request body.' });
+            }
+
+            if (value === undefined || value === null || value === '') continue;
+
+            if (rule.type && typeof value !== rule.type) {
+                return res.status(400).json({ error: 'Invalid request body.' });
+            }
+
+            if (rule.maxLength && typeof value === 'string' && value.length > rule.maxLength) {
+                return res.status(400).json({ error: 'Invalid request body.' });
+            }
+
+            if (rule.format === 'email' && typeof value === 'string' && !isValidEmail(normalizeEmail(value))) {
+                return res.status(400).json({ error: 'Invalid request body.' });
+            }
+        }
+
+        next();
+    };
+}
+
 function establishSession(req, user) {
     return new Promise((resolve, reject) => {
         req.session.regenerate((err) => {
@@ -156,6 +202,59 @@ function establishSession(req, user) {
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
 const expensiveActionRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 6 });
+
+const authLoginSchema = {
+    email: { required: true, type: 'string', maxLength: 254, format: 'email' },
+    password: { required: true, type: 'string', maxLength: 128 }
+};
+
+const authRegisterSchema = {
+    email: { required: true, type: 'string', maxLength: 254, format: 'email' },
+    password: { required: true, type: 'string', maxLength: 128 },
+    restaurant_name: { required: true, type: 'string', maxLength: 160 },
+    short_description: { type: 'string', maxLength: 500 },
+    contact_email: { type: 'string', maxLength: 254, format: 'email' },
+    contact_phone: { type: 'string', maxLength: 80 },
+    street: { type: 'string', maxLength: 160 },
+    house_number: { type: 'string', maxLength: 40 },
+    postal_code: { type: 'string', maxLength: 40 },
+    city: { type: 'string', maxLength: 120 },
+    plan_choice: { type: 'string', maxLength: 20 },
+    current_plan: { type: 'string', maxLength: 20 },
+    domain_choice: { type: 'string', maxLength: 40 },
+    custom_domain: { type: 'string', maxLength: 253 }
+};
+
+const restaurantPatchSchema = {
+    restaurant_name: { type: 'string', maxLength: 160 },
+    short_description: { type: 'string', maxLength: 500 },
+    contact_email: { type: 'string', maxLength: 254, format: 'email' },
+    contact_phone: { type: 'string', maxLength: 80 },
+    whatsapp: { type: 'string', maxLength: 80 },
+    street: { type: 'string', maxLength: 160 },
+    house_number: { type: 'string', maxLength: 40 },
+    postal_code: { type: 'string', maxLength: 40 },
+    city: { type: 'string', maxLength: 120 },
+    country: { type: 'string', maxLength: 80 },
+    instagram_url: { type: 'string', maxLength: 1000 },
+    facebook_url: { type: 'string', maxLength: 1000 },
+    tiktok_url: { type: 'string', maxLength: 1000 },
+    hero_title: { type: 'string', maxLength: 180 },
+    hero_subtitle: { type: 'string', maxLength: 280 },
+    about_text: { type: 'string', maxLength: 2500 },
+    logo_image_url: { type: 'string', maxLength: 1000 },
+    hero_image_url: { type: 'string', maxLength: 1000 },
+    footer_note: { type: 'string', maxLength: 300 },
+    seo_title: { type: 'string', maxLength: 70 },
+    seo_description: { type: 'string', maxLength: 180 },
+    accent_color: { type: 'string', maxLength: 20 },
+    primary_language: { type: 'string', maxLength: 10 },
+    template_key: { type: 'string', maxLength: 50 },
+    font_family: { type: 'string', maxLength: 40 },
+    heading_style: { type: 'string', maxLength: 40 },
+    menu_layout: { type: 'string', maxLength: 40 },
+    dish_image_style: { type: 'string', maxLength: 40 }
+};
 
 function ensureCsrfToken(req) {
     if (!req.session.csrfToken) {
@@ -839,7 +938,7 @@ function ensureApplicationTables() {
 
 // --- Auth Routes ---
 
-app.post('/api/auth/register', authRateLimit, async (req, res) => {
+app.post('/api/auth/register', authRateLimit, validateJsonBody(authRegisterSchema), async (req, res) => {
     const body = req.body || {};
     const email = normalizeEmail(body.email);
     const { password } = body;
@@ -881,7 +980,7 @@ app.post('/api/auth/register', authRateLimit, async (req, res) => {
     }
 });
 
-app.post('/api/auth/login', authRateLimit, async (req, res) => {
+app.post('/api/auth/login', authRateLimit, validateJsonBody(authLoginSchema), async (req, res) => {
     const body = req.body || {};
     const email = normalizeEmail(body.email);
     const { password } = body;
@@ -1233,7 +1332,7 @@ app.get('/api/restaurant/onboarding', isAuthenticated, hasRole('restaurant_owner
     });
 });
 
-app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), validateJsonBody(restaurantPatchSchema), (req, res) => {
     const restaurant = getOwnerRestaurant(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
