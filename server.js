@@ -514,6 +514,10 @@ function detectImageMime(buffer) {
     return null;
 }
 
+function normalizeUploadContentType(value) {
+    return String(value || '').split(';')[0].trim().toLowerCase();
+}
+
 function imageExtension(mime) {
     return {
         'image/jpeg': 'jpg',
@@ -1445,6 +1449,11 @@ app.post(
 
         const detectedMime = detectImageMime(body);
         if (!detectedMime || !IMAGE_UPLOAD_TYPES.includes(detectedMime)) {
+            return sendValidationError(res, new Error('INVALID_IMAGE_TYPE'));
+        }
+
+        const requestMime = normalizeUploadContentType(req.get('Content-Type'));
+        if (!IMAGE_UPLOAD_TYPES.includes(requestMime) || requestMime !== detectedMime) {
             return sendValidationError(res, new Error('INVALID_IMAGE_TYPE'));
         }
 

@@ -6,6 +6,10 @@ const db = require('../lib/db');
 
 const PORT = 3555;
 const BASE = `http://localhost:${PORT}`;
+const ONE_PIXEL_PNG = Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000000020001e221bc330000000049454e44ae426082',
+    'hex'
+);
 let serverProcess;
 
 function request(method, path, { cookie, body, headers, rawBody } = {}) {
@@ -335,10 +339,62 @@ test('public, owner and admin pages use stricter script CSP', async () => {
     assert.doesNotMatch(dashboard.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
 });
 
+test('image uploads require real allowed image signatures and matching MIME type', async () => {
+    const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
+    const token = await csrf(ownerCookie);
+
+    const upload = await request('POST', '/api/uploads/image', {
+        cookie: ownerCookie,
+        headers: {
+            'Content-Type': 'image/png',
+            'X-CSRF-Token': token,
+            'X-Forwarded-For': '203.0.113.91',
+            'X-Upload-Context': 'security-test',
+            'X-Upload-Name': 'security-test.png'
+        },
+        rawBody: ONE_PIXEL_PNG
+    });
+    assert.equal(upload.status, 200);
+    assert.equal(upload.body.mime, 'image/png');
+
+    const removeUpload = await request('DELETE', `/api/media-assets/${upload.body.id}`, {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token }
+    });
+    assert.equal(removeUpload.status, 200);
+
+    const fakeExe = await request('POST', '/api/uploads/image', {
+        cookie: ownerCookie,
+        headers: {
+            'Content-Type': 'image/png',
+            'X-CSRF-Token': token,
+            'X-Forwarded-For': '203.0.113.91',
+            'X-Upload-Context': 'security-test',
+            'X-Upload-Name': 'fake-menu.png'
+        },
+        rawBody: Buffer.from('4d5a90000300000004000000ffff0000', 'hex')
+    });
+    assert.equal(fakeExe.status, 400);
+    assert.equal(fakeExe.body.error, 'Only JPEG, PNG, WebP or GIF images are allowed.');
+
+    const mismatchedMime = await request('POST', '/api/uploads/image', {
+        cookie: ownerCookie,
+        headers: {
+            'Content-Type': 'image/jpeg',
+            'X-CSRF-Token': token,
+            'X-Forwarded-For': '203.0.113.91',
+            'X-Upload-Context': 'security-test',
+            'X-Upload-Name': 'mismatch.jpg'
+        },
+        rawBody: ONE_PIXEL_PNG
+    });
+    assert.equal(mismatchedMime.status, 400);
+    assert.equal(mismatchedMime.body.error, 'Only JPEG, PNG, WebP or GIF images are allowed.');
+});
+
 test('expensive owner actions allow normal use and rate limit repeated requests', async () => {
     const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
     const token = await csrf(ownerCookie);
-    const tinyPng = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
     const upload = await request('POST', '/api/uploads/image', {
         cookie: ownerCookie,
@@ -348,7 +404,7 @@ test('expensive owner actions allow normal use and rate limit repeated requests'
             'X-Upload-Context': 'rate-test',
             'X-Upload-Name': 'rate-test.png'
         },
-        rawBody: tinyPng
+        rawBody: ONE_PIXEL_PNG
     });
     assert.equal(upload.status, 200);
     assert.ok(upload.body.id);
