@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
 const http = require('node:http');
+const fs = require('node:fs');
+const path = require('node:path');
 const db = require('../lib/db');
 const storage = require('../lib/storage');
 
@@ -365,6 +367,10 @@ test('storage can select R2 driver and issue signed save/delete requests with mo
         contentType: 'image/png'
     });
     assert.equal(saved.url, 'https://assets.example.test/uploads/restaurants/7/menu.png');
+    assert.equal(
+        r2Storage.resolveAssetUrl('/uploads/restaurants/7/menu.png'),
+        'https://assets.example.test/uploads/restaurants/7/menu.png'
+    );
 
     const deleted = await r2Storage.deleteRestaurantAsset({ restaurantId: 7, url: saved.url });
     assert.equal(deleted, true);
@@ -380,6 +386,10 @@ test('storage can select R2 driver and issue signed save/delete requests with mo
 test('image uploads require real allowed image signatures and matching MIME type', async () => {
     const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
     const token = await csrf(ownerCookie);
+    const restaurant = await request('GET', '/api/restaurant', { cookie: ownerCookie });
+    assert.equal(restaurant.status, 200);
+    const originalHeroImage = restaurant.body.config.hero_image_url || '';
+    const slug = restaurant.body.public_slug_internal;
 
     const upload = await request('POST', '/api/uploads/image', {
         cookie: ownerCookie,
@@ -395,6 +405,37 @@ test('image uploads require real allowed image signatures and matching MIME type
     assert.equal(upload.status, 200);
     assert.equal(upload.body.mime, 'image/png');
     assert.match(upload.body.url, /^\/uploads\/restaurants\/\d+\/\d+-security-test-[a-f0-9]{16}\.png$/);
+
+    const setHeroImage = await request('PATCH', '/api/restaurant', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: { hero_image_url: upload.body.url }
+    });
+    assert.equal(setHeroImage.status, 200);
+
+    const preview = await request('GET', '/api/preview', { cookie: ownerCookie });
+    assert.equal(preview.status, 200);
+    assert.equal(preview.body.siteConfig.hero.imageUrl, upload.body.url);
+
+    const prepare = await request('POST', '/api/restaurant/cf-prepare', {
+        cookie: ownerCookie,
+        headers: {
+            'X-CSRF-Token': token,
+            'X-Forwarded-For': '203.0.113.91'
+        }
+    });
+    assert.equal(prepare.status, 200);
+
+    const exportedDataPath = path.join(__dirname, '..', 'publish', slug, 'data.json');
+    const exportedData = JSON.parse(fs.readFileSync(exportedDataPath, 'utf8'));
+    assert.equal(exportedData.siteConfig.hero.imageUrl, upload.body.url);
+
+    const restoreHeroImage = await request('PATCH', '/api/restaurant', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: { hero_image_url: originalHeroImage }
+    });
+    assert.equal(restoreHeroImage.status, 200);
 
     const removeUpload = await request('DELETE', `/api/media-assets/${upload.body.id}`, {
         cookie: ownerCookie,

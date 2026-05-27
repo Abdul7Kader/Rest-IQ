@@ -2046,10 +2046,10 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
             hero: {
                 title: c.hero_title || r.restaurant_name,
                 subtitle: c.hero_subtitle || r.short_description,
-                imageUrl: c.hero_image_url
+                imageUrl: storage.resolveAssetUrl(c.hero_image_url)
             },
             aboutText: c.about_text,
-            logoUrl: c.logo_image_url,
+            logoUrl: storage.resolveAssetUrl(c.logo_image_url),
             footerNote: c.footer_note,
             seo: {
                 title: c.seo_title || c.hero_title || r.restaurant_name,
@@ -2083,14 +2083,14 @@ function getPreviewData(restaurantId, { previewMode = true } = {}) {
             categories: categories.map(cat => ({
                 name: cat.category_name,
                 mode: cat.layout_mode && cat.layout_mode !== 'inherit' ? cat.layout_mode : cat.display_mode,
-                image: cat.image_url,
+                image: storage.resolveAssetUrl(cat.image_url),
                 dishes: cat.dishes.map(d => ({
                     name: d.dish_name,
                     price: (d.price_cents / 100).toFixed(2),
                     description: d.description_text,
                     ingredients: d.ingredients_text,
                     allergens: d.allergens_text,
-                    image: d.image_url,
+                    image: storage.resolveAssetUrl(d.image_url),
                     badge: d.badge_text
                 }))
             }))
