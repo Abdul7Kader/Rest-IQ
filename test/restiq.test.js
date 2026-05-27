@@ -139,6 +139,29 @@ test('admin APIs require CSRF for mutations and accept valid CSRF', async () => 
     assert.equal(withToken.status, 200);
 });
 
+test('security headers and session cookie flags are present', async () => {
+    const page = await request('GET', '/index.html');
+    assert.equal(page.status, 200);
+    assert.equal(page.headers['x-powered-by'], undefined);
+    assert.equal(page.headers['x-content-type-options'], 'nosniff');
+    assert.equal(page.headers['x-dns-prefetch-control'], 'off');
+    assert.equal(page.headers['x-frame-options'], 'DENY');
+    assert.equal(page.headers['x-permitted-cross-domain-policies'], 'none');
+    assert.equal(page.headers['referrer-policy'], 'strict-origin-when-cross-origin');
+    assert.equal(page.headers['permissions-policy'], 'camera=(), microphone=(), geolocation=()');
+    assert.match(page.headers['content-security-policy'], /default-src 'self'/);
+
+    const loginRes = await request('POST', '/api/auth/login', {
+        body: { email: 'mario@trattoria-mario.de', password: 'owner123' }
+    });
+    const setCookie = loginRes.headers['set-cookie'][0];
+    assert.match(setCookie, /^restiq\.sid=/);
+    assert.match(setCookie, /HttpOnly/);
+    assert.match(setCookie, /SameSite=Lax/);
+    assert.match(setCookie, /Priority=High/);
+    assert.doesNotMatch(setCookie, /Secure/);
+});
+
 test('admin can read platform controls', async () => {
     const adminCookie = await login('admin@restiq.app', 'admin123');
     const providers = await request('GET', '/api/admin/domain-providers', { cookie: adminCookie });

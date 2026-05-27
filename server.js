@@ -11,6 +11,7 @@ const SQLiteSessionStore = require('./lib/session-store');
 const app = express();
 const port = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
+const trustProxy = process.env.TRUST_PROXY === '1';
 const SESSION_COOKIE_NAME = 'restiq.sid';
 const SESSION_SECRET = process.env.SESSION_SECRET || (
     isProduction
@@ -36,7 +37,7 @@ if (!process.env.SESSION_SECRET && !isProduction) {
 }
 
 app.disable('x-powered-by');
-if (process.env.TRUST_PROXY === '1') {
+if (trustProxy) {
     app.set('trust proxy', 1);
 }
 
@@ -60,10 +61,15 @@ function contentSecurityPolicyForPath(requestPath) {
 
 app.use((req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-DNS-Prefetch-Control', 'off');
     res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     res.setHeader('Content-Security-Policy', contentSecurityPolicyForPath(req.path));
+    if (isProduction) {
+        res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+    }
     next();
 });
 app.use(express.static('public'));
@@ -75,10 +81,12 @@ app.use(session({
     store: new SQLiteSessionStore(db),
     resave: false,
     saveUninitialized: false,
+    proxy: trustProxy,
     cookie: {
         secure: isProduction,
         httpOnly: true,
         sameSite: 'lax',
+        priority: 'high',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
