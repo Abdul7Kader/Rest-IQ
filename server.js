@@ -877,6 +877,8 @@ function ensureApplicationTables() {
         CREATE TABLE IF NOT EXISTS media_assets (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             restaurant_id INTEGER NOT NULL,
+            asset_kind TEXT NOT NULL DEFAULT 'restaurant_image',
+            storage_key TEXT,
             url TEXT NOT NULL UNIQUE,
             original_name TEXT,
             context TEXT NOT NULL DEFAULT 'image',
@@ -934,6 +936,8 @@ function ensureApplicationTables() {
 
     addColumnIfMissing('menu_categories', 'image_url', 'TEXT');
     addColumnIfMissing('menu_categories', 'layout_mode', "TEXT NOT NULL DEFAULT 'inherit'");
+    addColumnIfMissing('media_assets', 'asset_kind', "TEXT NOT NULL DEFAULT 'restaurant_image'");
+    addColumnIfMissing('media_assets', 'storage_key', 'TEXT');
     addColumnIfMissing('site_configs', 'font_family', "TEXT NOT NULL DEFAULT 'system'");
     addColumnIfMissing('site_configs', 'heading_style', "TEXT NOT NULL DEFAULT 'clean'");
     addColumnIfMissing('site_configs', 'menu_layout', "TEXT NOT NULL DEFAULT 'list'");
@@ -1469,9 +1473,9 @@ app.post(
         const url = storedFile.url;
         const originalName = trimText(req.get('X-Upload-Name') || '', 180) || null;
         const mediaInfo = db.prepare(`
-            INSERT INTO media_assets (restaurant_id, url, original_name, context, mime_type, size_bytes)
-            VALUES (?, ?, ?, ?, ?, ?)
-        `).run(restaurant.id, url, originalName, safeContext, detectedMime, body.length);
+            INSERT INTO media_assets (restaurant_id, asset_kind, storage_key, url, original_name, context, mime_type, size_bytes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(restaurant.id, 'restaurant_image', storedFile.storageKey, url, originalName, safeContext, detectedMime, body.length);
 
         res.json({
             success: true,
@@ -1488,7 +1492,7 @@ app.get('/api/media-assets', isAuthenticated, hasRole('restaurant_owner'), (req,
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
     const assets = db.prepare(`
-        SELECT id, url, original_name, context, mime_type, size_bytes, created_at
+        SELECT id, asset_kind, storage_key, url, original_name, context, mime_type, size_bytes, created_at
         FROM media_assets
         WHERE restaurant_id = ? AND is_active = 1
         ORDER BY created_at DESC, id DESC
@@ -1502,7 +1506,7 @@ app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner')
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
     const asset = db.prepare(`
-        SELECT id, url
+        SELECT id, url, storage_key
         FROM media_assets
         WHERE id = ? AND restaurant_id = ? AND is_active = 1
     `).get(req.params.id, restaurant.id);
@@ -1529,7 +1533,7 @@ app.delete('/api/media-assets/:id', isAuthenticated, hasRole('restaurant_owner')
     }
 
     db.prepare('UPDATE media_assets SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND restaurant_id = ?').run(asset.id, restaurant.id);
-    await storage.deleteRestaurantAsset({ restaurantId: restaurant.id, url: asset.url });
+    await storage.deleteRestaurantAsset({ restaurantId: restaurant.id, url: asset.url, storageKey: asset.storage_key });
 
     res.json({ success: true });
 });

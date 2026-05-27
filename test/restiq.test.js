@@ -367,6 +367,7 @@ test('storage can select R2 driver and issue signed save/delete requests with mo
         contentType: 'image/png'
     });
     assert.equal(saved.url, 'https://assets.example.test/uploads/restaurants/7/menu.png');
+    assert.equal(saved.storageKey, 'uploads/restaurants/7/menu.png');
     assert.equal(
         r2Storage.resolveAssetUrl('/uploads/restaurants/7/menu.png'),
         'https://assets.example.test/uploads/restaurants/7/menu.png'
@@ -406,6 +407,18 @@ test('image uploads require real allowed image signatures and matching MIME type
     assert.equal(upload.body.mime, 'image/png');
     assert.match(upload.body.url, /^\/uploads\/restaurants\/\d+\/\d+-security-test-[a-f0-9]{16}\.png$/);
 
+    const activeMetadata = db.prepare(`
+        SELECT asset_kind, storage_key, url, mime_type, size_bytes, is_active
+        FROM media_assets
+        WHERE id = ?
+    `).get(upload.body.id);
+    assert.equal(activeMetadata.asset_kind, 'restaurant_image');
+    assert.equal(activeMetadata.storage_key, upload.body.url.replace(/^\/+/, ''));
+    assert.equal(activeMetadata.url, upload.body.url);
+    assert.equal(activeMetadata.mime_type, 'image/png');
+    assert.equal(activeMetadata.size_bytes, ONE_PIXEL_PNG.length);
+    assert.equal(activeMetadata.is_active, 1);
+
     const setHeroImage = await request('PATCH', '/api/restaurant', {
         cookie: ownerCookie,
         headers: { 'X-CSRF-Token': token },
@@ -442,6 +455,9 @@ test('image uploads require real allowed image signatures and matching MIME type
         headers: { 'X-CSRF-Token': token }
     });
     assert.equal(removeUpload.status, 200);
+    const inactiveMetadata = db.prepare('SELECT storage_key, is_active FROM media_assets WHERE id = ?').get(upload.body.id);
+    assert.equal(inactiveMetadata.storage_key, activeMetadata.storage_key);
+    assert.equal(inactiveMetadata.is_active, 0);
 
     const fakeExe = await request('POST', '/api/uploads/image', {
         cookie: ownerCookie,

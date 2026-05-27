@@ -267,6 +267,8 @@ CREATE TABLE sessions (
 CREATE TABLE media_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     restaurant_id INTEGER NOT NULL,
+    asset_kind TEXT NOT NULL DEFAULT 'restaurant_image',
+    storage_key TEXT,
     url TEXT UNIQUE NOT NULL,
     original_name TEXT,
     context TEXT NOT NULL DEFAULT 'image',
