@@ -414,16 +414,63 @@ test('image uploads require real allowed image signatures and matching MIME type
     assert.notDeepEqual(storedImage, ONE_PIXEL_PNG);
 
     const activeMetadata = db.prepare(`
-        SELECT asset_kind, storage_key, url, mime_type, size_bytes, is_active
+        SELECT asset_kind, owner_type, owner_id, storage_key, url, mime_type, size_bytes, is_active
         FROM media_assets
         WHERE id = ?
     `).get(upload.body.id);
     assert.equal(activeMetadata.asset_kind, 'restaurant_image');
+    assert.equal(activeMetadata.owner_type, 'restaurant');
+    assert.equal(activeMetadata.owner_id, restaurant.body.id);
     assert.equal(activeMetadata.storage_key, upload.body.url.replace(/^\/+/, ''));
     assert.equal(activeMetadata.url, upload.body.url);
     assert.equal(activeMetadata.mime_type, 'image/png');
     assert.equal(activeMetadata.size_bytes, storedImage.length);
     assert.equal(activeMetadata.is_active, 1);
+
+    const menu = await request('GET', '/api/menu', { cookie: ownerCookie });
+    assert.equal(menu.status, 200);
+    const category = await request('POST', '/api/menu/categories', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: {
+            menu_id: menu.body.id,
+            category_name: `Asset Test ${Date.now()}`,
+            image_url: upload.body.url
+        }
+    });
+    assert.equal(category.status, 200);
+
+    const categoryMetadata = db.prepare('SELECT owner_type, owner_id FROM media_assets WHERE id = ?').get(upload.body.id);
+    assert.equal(categoryMetadata.owner_type, 'category');
+    assert.equal(categoryMetadata.owner_id, category.body.id);
+
+    const dish = await request('POST', '/api/dishes', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token },
+        body: {
+            category_id: category.body.id,
+            dish_name: `Asset Dish ${Date.now()}`,
+            price_cents: 1299,
+            image_url: upload.body.url
+        }
+    });
+    assert.equal(dish.status, 200);
+
+    const dishMetadata = db.prepare('SELECT owner_type, owner_id FROM media_assets WHERE id = ?').get(upload.body.id);
+    assert.equal(dishMetadata.owner_type, 'dish');
+    assert.equal(dishMetadata.owner_id, dish.body.id);
+
+    const removeDish = await request('DELETE', `/api/dishes/${dish.body.id}`, {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token }
+    });
+    assert.equal(removeDish.status, 200);
+
+    const removeCategory = await request('DELETE', `/api/menu/categories/${category.body.id}`, {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token }
+    });
+    assert.equal(removeCategory.status, 200);
 
     const setHeroImage = await request('PATCH', '/api/restaurant', {
         cookie: ownerCookie,
@@ -431,6 +478,9 @@ test('image uploads require real allowed image signatures and matching MIME type
         body: { hero_image_url: upload.body.url }
     });
     assert.equal(setHeroImage.status, 200);
+    const restaurantMetadata = db.prepare('SELECT owner_type, owner_id FROM media_assets WHERE id = ?').get(upload.body.id);
+    assert.equal(restaurantMetadata.owner_type, 'restaurant');
+    assert.equal(restaurantMetadata.owner_id, restaurant.body.id);
 
     const preview = await request('GET', '/api/preview', { cookie: ownerCookie });
     assert.equal(preview.status, 200);

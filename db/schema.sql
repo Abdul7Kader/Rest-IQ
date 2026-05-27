@@ -268,6 +268,8 @@ CREATE TABLE media_assets (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     restaurant_id INTEGER NOT NULL,
     asset_kind TEXT NOT NULL DEFAULT 'restaurant_image',
+    owner_type TEXT NOT NULL DEFAULT 'restaurant',
+    owner_id INTEGER,
     storage_key TEXT,
     url TEXT UNIQUE NOT NULL,
     original_name TEXT,

@@ -28,6 +28,7 @@ const PLATFORM_SETTING_KEYS = new Set([
     'domain_affiliate_note',
     'quality_review_required'
 ]);
+const ASSET_OWNER_TYPES = new Set(['restaurant', 'category', 'dish']);
 
 if (!SESSION_SECRET) {
     throw new Error('SESSION_SECRET must be set in production.');
@@ -528,6 +529,24 @@ function imageExtension(mime) {
     }[mime];
 }
 
+function assignMediaAssetOwner({ restaurantId, url, ownerType, ownerId }) {
+    if (!url) return 0;
+    if (!ASSET_OWNER_TYPES.has(ownerType)) {
+        throw new Error('INVALID_ASSET_OWNER');
+    }
+    const normalizedOwnerId = normalizeInteger(ownerId);
+    if (normalizedOwnerId <= 0) {
+        throw new Error('INVALID_ASSET_OWNER');
+    }
+
+    const result = db.prepare(`
+        UPDATE media_assets
+        SET owner_type = ?, owner_id = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE restaurant_id = ? AND url = ? AND is_active = 1
+    `).run(ownerType, normalizedOwnerId, restaurantId, url);
+    return result.changes;
+}
+
 function getOwnerRestaurant(userId) {
     return db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(userId);
 }
@@ -879,6 +898,8 @@ function ensureApplicationTables() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             restaurant_id INTEGER NOT NULL,
             asset_kind TEXT NOT NULL DEFAULT 'restaurant_image',
+            owner_type TEXT NOT NULL DEFAULT 'restaurant',
+            owner_id INTEGER,
             storage_key TEXT,
             url TEXT NOT NULL UNIQUE,
             original_name TEXT,
@@ -938,6 +959,8 @@ function ensureApplicationTables() {
     addColumnIfMissing('menu_categories', 'image_url', 'TEXT');
     addColumnIfMissing('menu_categories', 'layout_mode', "TEXT NOT NULL DEFAULT 'inherit'");
     addColumnIfMissing('media_assets', 'asset_kind', "TEXT NOT NULL DEFAULT 'restaurant_image'");
+    addColumnIfMissing('media_assets', 'owner_type', "TEXT NOT NULL DEFAULT 'restaurant'");
+    addColumnIfMissing('media_assets', 'owner_id', 'INTEGER');
     addColumnIfMissing('media_assets', 'storage_key', 'TEXT');
     addColumnIfMissing('site_configs', 'font_family', "TEXT NOT NULL DEFAULT 'system'");
     addColumnIfMissing('site_configs', 'heading_style', "TEXT NOT NULL DEFAULT 'clean'");
@@ -1390,6 +1413,7 @@ app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), valid
     const values = [];
     const configUpdates = [];
     const configValues = [];
+    const assetAssignments = [];
 
     try {
         for (const [field, normalizer] of Object.entries(restaurantNormalizers)) {
@@ -1401,8 +1425,17 @@ app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), valid
 
         for (const [field, normalizer] of Object.entries(configNormalizers)) {
             if (req.body[field] !== undefined) {
+                const normalizedValue = normalizer(req.body[field]);
                 configUpdates.push(`${field} = ?`);
-                configValues.push(normalizer(req.body[field]));
+                configValues.push(normalizedValue);
+                if (['logo_image_url', 'hero_image_url'].includes(field) && normalizedValue) {
+                    assetAssignments.push({
+                        restaurantId: restaurant.id,
+                        url: normalizedValue,
+                        ownerType: 'restaurant',
+                        ownerId: restaurant.id
+                    });
+                }
             }
         }
     } catch (error) {
@@ -1425,6 +1458,9 @@ app.patch('/api/restaurant', isAuthenticated, hasRole('restaurant_owner'), valid
             if (configUpdates.length > 0) {
                 configValues.push(restaurant.id);
                 db.prepare(`UPDATE site_configs SET ${configUpdates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE restaurant_id = ?`).run(...configValues);
+            }
+            for (const assignment of assetAssignments) {
+                assignMediaAssetOwner(assignment);
             }
         });
         transaction();
@@ -1481,9 +1517,23 @@ app.post(
         const url = storedFile.url;
         const originalName = trimText(req.get('X-Upload-Name') || '', 180) || null;
         const mediaInfo = db.prepare(`
-            INSERT INTO media_assets (restaurant_id, asset_kind, storage_key, url, original_name, context, mime_type, size_bytes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(restaurant.id, 'restaurant_image', storedFile.storageKey, url, originalName, safeContext, normalizedImage.mimeType, normalizedImage.buffer.length);
+            INSERT INTO media_assets (
+                restaurant_id, asset_kind, owner_type, owner_id, storage_key,
+                url, original_name, context, mime_type, size_bytes
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            restaurant.id,
+            'restaurant_image',
+            'restaurant',
+            restaurant.id,
+            storedFile.storageKey,
+            url,
+            originalName,
+            safeContext,
+            normalizedImage.mimeType,
+            normalizedImage.buffer.length
+        );
 
         res.json({
             success: true,
@@ -1500,7 +1550,7 @@ app.get('/api/media-assets', isAuthenticated, hasRole('restaurant_owner'), (req,
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
     const assets = db.prepare(`
-        SELECT id, asset_kind, storage_key, url, original_name, context, mime_type, size_bytes, created_at
+        SELECT id, asset_kind, owner_type, owner_id, storage_key, url, original_name, context, mime_type, size_bytes, created_at
         FROM media_assets
         WHERE restaurant_id = ? AND is_active = 1
         ORDER BY created_at DESC, id DESC
@@ -1794,6 +1844,12 @@ app.post('/api/menu/categories', isAuthenticated, hasRole('restaurant_owner'), (
 
     try {
         const info = db.prepare('INSERT INTO menu_categories (menu_id, category_name, display_mode, layout_mode, sort_order, image_url) VALUES (?, ?, ?, ?, ?, ?)').run(menu_id, categoryName, displayMode, layoutMode, sortOrder, imageUrl);
+        assignMediaAssetOwner({
+            restaurantId: getOwnerRestaurant(req.session.userId).id,
+            url: imageUrl,
+            ownerType: 'category',
+            ownerId: info.lastInsertRowid
+        });
         res.json({ success: true, id: info.lastInsertRowid });
     } catch (e) {
         res.status(500).json({ error: 'Failed to add category.' });
@@ -1837,6 +1893,7 @@ app.patch('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner
 
     const fields = [];
     const values = [];
+    let imageUrlForAssignment;
     try {
         if (req.body.category_name !== undefined) {
             const name = trimText(req.body.category_name, 120);
@@ -1853,8 +1910,9 @@ app.patch('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner
             values.push(normalizeCategoryLayoutMode(req.body.layout_mode));
         }
         if (req.body.image_url !== undefined) {
+            imageUrlForAssignment = normalizeImageUrl(req.body.image_url);
             fields.push('image_url = ?');
-            values.push(normalizeImageUrl(req.body.image_url));
+            values.push(imageUrlForAssignment);
         }
         if (req.body.sort_order !== undefined) {
             fields.push('sort_order = ?');
@@ -1871,6 +1929,14 @@ app.patch('/api/menu/categories/:id', isAuthenticated, hasRole('restaurant_owner
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     values.push(req.params.id);
     db.prepare(`UPDATE menu_categories SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+    if (imageUrlForAssignment) {
+        assignMediaAssetOwner({
+            restaurantId: getOwnerRestaurant(req.session.userId).id,
+            url: imageUrlForAssignment,
+            ownerType: 'category',
+            ownerId: req.params.id
+        });
+    }
     res.json({ success: true });
 });
 
@@ -1910,6 +1976,12 @@ app.post('/api/dishes', isAuthenticated, hasRole('restaurant_owner'), (req, res)
             INSERT INTO dishes (category_id, dish_name, price_cents, description_text, ingredients_text, allergens_text, sort_order, image_url, badge_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(category_id, payload.dish_name, payload.price_cents, payload.description_text, payload.ingredients_text, payload.allergens_text, payload.sort_order, payload.image_url, payload.badge_text);
+        assignMediaAssetOwner({
+            restaurantId: getOwnerRestaurant(req.session.userId).id,
+            url: payload.image_url,
+            ownerType: 'dish',
+            ownerId: info.lastInsertRowid
+        });
         res.json({ success: true, id: info.lastInsertRowid });
     } catch (e) {
         res.status(500).json({ error: 'Failed to add dish.' });
@@ -1928,6 +2000,7 @@ app.patch('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req,
 
     const sets = [];
     const values = [];
+    let imageUrlForAssignment;
     try {
         const fieldNormalizers = {
             dish_name: value => {
@@ -1947,8 +2020,12 @@ app.patch('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req,
 
         for (const [field, normalizer] of Object.entries(fieldNormalizers)) {
             if (req.body[field] !== undefined) {
+                const normalizedValue = normalizer(req.body[field]);
                 sets.push(`${field} = ?`);
-                values.push(normalizer(req.body[field]));
+                values.push(normalizedValue);
+                if (field === 'image_url') {
+                    imageUrlForAssignment = normalizedValue;
+                }
             }
         }
     } catch (error) {
@@ -1958,6 +2035,14 @@ app.patch('/api/dishes/:id', isAuthenticated, hasRole('restaurant_owner'), (req,
     if (sets.length === 0) return res.status(400).json({ error: 'No fields to update.' });
     values.push(req.params.id);
     db.prepare(`UPDATE dishes SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    if (imageUrlForAssignment) {
+        assignMediaAssetOwner({
+            restaurantId: getOwnerRestaurant(req.session.userId).id,
+            url: imageUrlForAssignment,
+            ownerType: 'dish',
+            ownerId: req.params.id
+        });
+    }
     res.json({ success: true });
 });
 
