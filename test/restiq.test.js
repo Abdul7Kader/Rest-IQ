@@ -8,13 +8,16 @@ const PORT = 3555;
 const BASE = `http://localhost:${PORT}`;
 let serverProcess;
 
-function request(method, path, { cookie, body, headers } = {}) {
+function request(method, path, { cookie, body, headers, rawBody } = {}) {
     return new Promise((resolve, reject) => {
-        const payload = body === undefined ? null : JSON.stringify(body);
+        const payload = rawBody !== undefined
+            ? rawBody
+            : (body === undefined ? null : JSON.stringify(body));
         const req = http.request(`${BASE}${path}`, {
             method,
             headers: {
-                ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
+                ...(payload && rawBody === undefined ? { 'Content-Type': 'application/json' } : {}),
+                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
                 ...(cookie ? { Cookie: cookie } : {}),
                 ...(headers || {})
             }
@@ -252,4 +255,46 @@ test('public, owner and admin pages use stricter script CSP', async () => {
     assert.doesNotMatch(register.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
     assert.doesNotMatch(admin.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
     assert.doesNotMatch(dashboard.headers['content-security-policy'], /script-src[^;]*'unsafe-inline'/);
+});
+
+test('expensive owner actions allow normal use and rate limit repeated requests', async () => {
+    const ownerCookie = await login('mario@trattoria-mario.de', 'owner123');
+    const token = await csrf(ownerCookie);
+    const tinyPng = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+    const upload = await request('POST', '/api/uploads/image', {
+        cookie: ownerCookie,
+        headers: {
+            'Content-Type': 'image/png',
+            'X-CSRF-Token': token,
+            'X-Upload-Context': 'rate-test',
+            'X-Upload-Name': 'rate-test.png'
+        },
+        rawBody: tinyPng
+    });
+    assert.equal(upload.status, 200);
+    assert.ok(upload.body.id);
+
+    const removeUpload = await request('DELETE', `/api/media-assets/${upload.body.id}`, {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token }
+    });
+    assert.equal(removeUpload.status, 200);
+
+    const firstPrepare = await request('POST', '/api/restaurant/cf-prepare', {
+        cookie: ownerCookie,
+        headers: { 'X-CSRF-Token': token }
+    });
+    assert.equal(firstPrepare.status, 200);
+
+    let lastPrepare;
+    for (let i = 0; i < 5; i += 1) {
+        lastPrepare = await request('POST', '/api/restaurant/cf-prepare', {
+            cookie: ownerCookie,
+            headers: { 'X-CSRF-Token': token }
+        });
+    }
+
+    assert.equal(lastPrepare.status, 429);
+    assert.equal(lastPrepare.body.error, 'Too many attempts. Please try again later.');
 });

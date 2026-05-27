@@ -147,6 +147,7 @@ function establishSession(req, user) {
 }
 
 const authRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 8 });
+const expensiveActionRateLimit = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 6 });
 
 function ensureCsrfToken(req) {
     if (!req.session.csrfToken) {
@@ -1321,6 +1322,7 @@ app.post(
     '/api/uploads/image',
     isAuthenticated,
     hasRole('restaurant_owner'),
+    expensiveActionRateLimit,
     express.raw({ type: IMAGE_UPLOAD_TYPES, limit: IMAGE_UPLOAD_MAX_BYTES }),
     (req, res) => {
         const restaurant = getOwnerRestaurant(req.session.userId);
@@ -2032,7 +2034,7 @@ app.get('/preview/:id', isAuthenticated, hasRole('platform_admin'), (req, res) =
 // Bereitet den Cloudflare Pages Export vor (Free Plan only).
 // Erstellt cloudflare-export/<slug>/ mit _redirects, _headers, deploy-info.json.
 
-app.post('/api/restaurant/cf-prepare', isAuthenticated, hasRole('restaurant_owner'), (req, res) => {
+app.post('/api/restaurant/cf-prepare', isAuthenticated, hasRole('restaurant_owner'), expensiveActionRateLimit, (req, res) => {
     const restaurant = db.prepare('SELECT * FROM restaurants WHERE owner_user_id = ?').get(req.session.userId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
@@ -2191,7 +2193,7 @@ app.post('/api/restaurant/domain', isAuthenticated, hasRole('restaurant_owner'),
 });
 
 // Admin: Cloudflare Prepare für beliebiges Restaurant (Admin only)
-app.post('/api/admin/cf-prepare/:restaurantId', isAuthenticated, hasRole('platform_admin'), (req, res) => {
+app.post('/api/admin/cf-prepare/:restaurantId', isAuthenticated, hasRole('platform_admin'), expensiveActionRateLimit, (req, res) => {
     const restaurant = db.prepare('SELECT * FROM restaurants WHERE id = ?').get(req.params.restaurantId);
     if (!restaurant) return res.status(404).json({ error: 'Restaurant not found.' });
 
