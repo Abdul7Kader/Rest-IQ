@@ -82,7 +82,7 @@ async function csrf(cookie) {
 test.before(async () => {
     serverProcess = spawn(process.execPath, ['server.js'], {
         cwd: `${__dirname}/..`,
-        env: { ...process.env, PORT: String(PORT), SESSION_SECRET: 'test-session-secret', TRUST_PROXY: '1' },
+        env: { ...process.env, PORT: String(PORT), SESSION_SECRET: 'test-session-secret', TRUST_PROXY: '1', RESTIQ_STORAGE_DRIVER: 'local' },
         stdio: 'ignore',
         windowsHide: true
     });

@@ -67,7 +67,9 @@ main().catch(error => {
     console.error(JSON.stringify({
         ok: false,
         reason: 'r2_smoke_failed',
-        error: error.message
+        error: error.message,
+        storageDriverIsR2: String(process.env.RESTIQ_STORAGE_DRIVER || '').toLowerCase() === 'r2',
+        r2: error.r2 || null
     }, null, 2));
     process.exitCode = 1;
 });
