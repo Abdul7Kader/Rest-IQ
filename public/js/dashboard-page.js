@@ -152,6 +152,72 @@ function refreshUploadPreviews(root = document) {
             preview.style.visibility = src ? 'visible' : 'hidden';
         }
     });
+    root.querySelectorAll('[data-image-preview]').forEach(preview => {
+        const input = preview.closest('form')?.querySelector(`[name="${preview.dataset.imagePreview}"]`);
+        const src = safeImageUrl(input?.value);
+        preview.src = src || '';
+        preview.style.visibility = src ? 'visible' : 'hidden';
+    });
+}
+
+function setHeroUploadStatus(message, type = 'info') {
+    const status = document.getElementById('heroImageUploadStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = type === 'error' ? '#dc2626' : 'var(--text-muted)';
+}
+
+async function uploadHeroImage() {
+    const fileInput = document.getElementById('heroImageFile');
+    const file = fileInput?.files?.[0];
+    if (!file) {
+        setHeroUploadStatus('Bitte zuerst ein Bild auswählen.', 'error');
+        return;
+    }
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+        setHeroUploadStatus('Bitte nur PNG, JPG, WebP oder GIF hochladen.', 'error');
+        return;
+    }
+    if (file.size > 4 * 1024 * 1024) {
+        setHeroUploadStatus('Das Bild ist zu groß. Maximal 4 MB.', 'error');
+        return;
+    }
+
+    const button = document.querySelector('[data-action="upload-hero-image"]');
+    const oldText = button?.textContent;
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Lade hoch...';
+    }
+    setHeroUploadStatus('Hero-Bild wird hochgeladen...');
+
+    try {
+        const res = await fetch('/api/uploads/image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': file.type,
+                'X-Upload-Context': 'hero',
+                'X-Upload-Name': file.name || '',
+                'X-CSRF-Token': await getCsrfToken()
+            },
+            body: file
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload fehlgeschlagen.');
+
+        const input = document.querySelector('#designForm [name="hero_image_url"]');
+        if (input) input.value = data.url;
+        refreshUploadPreviews(document.getElementById('designForm'));
+        await loadMediaAssets();
+        setHeroUploadStatus('Hero-Bild hochgeladen. Speichere danach das Design.');
+    } catch (error) {
+        setHeroUploadStatus(error.message, 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = oldText;
+        }
+    }
 }
 
 function setupUploadZones(root = document) {
@@ -913,6 +979,7 @@ function handleDashboardAction(event) {
     if (action === 'open-dish-modal') return openDishModal(id, categoryId);
     if (action === 'open-media-picker') return openMediaPicker(trigger.dataset.input, trigger);
     if (action === 'clear-image-input') return clearImageInput(trigger.dataset.input, trigger);
+    if (action === 'upload-hero-image') return uploadHeroImage();
     if (action === 'load-media-assets') return loadMediaAssets();
     if (action === 'toggle-closure') return toggleClosure(id, active);
     if (action === 'delete-closure') return deleteClosure(id);
