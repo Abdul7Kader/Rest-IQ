@@ -174,6 +174,13 @@ function setDishUploadStatus(message, type = 'info') {
     status.style.color = type === 'error' ? '#dc2626' : 'var(--text-muted)';
 }
 
+function setCategoryUploadStatus(message, type = 'info') {
+    const status = document.getElementById('categoryImageUploadStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = type === 'error' ? '#dc2626' : 'var(--text-muted)';
+}
+
 function validateSelectedImage(file) {
     if (!file) return 'Bitte zuerst ein Bild auswählen.';
     if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
@@ -269,6 +276,52 @@ async function uploadDishImage() {
         setDishUploadStatus('Gerichtbild hochgeladen. Speichere danach das Gericht.');
     } catch (error) {
         setDishUploadStatus(error.message, 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = oldText;
+        }
+    }
+}
+
+async function uploadCategoryImage() {
+    const form = document.getElementById('categoryForm');
+    const fileInput = document.getElementById('categoryImageFile');
+    const file = fileInput?.files?.[0];
+    const validationError = validateSelectedImage(file);
+    if (validationError) {
+        setCategoryUploadStatus(validationError, 'error');
+        return;
+    }
+
+    const button = document.querySelector('[data-action="upload-category-image"]');
+    const oldText = button?.textContent;
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Lade hoch...';
+    }
+    setCategoryUploadStatus('Kategoriebild wird hochgeladen...');
+
+    try {
+        const res = await fetch('/api/uploads/image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': file.type,
+                'X-Upload-Context': 'category',
+                'X-Upload-Name': file.name || '',
+                'X-CSRF-Token': await getCsrfToken()
+            },
+            body: file
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload fehlgeschlagen.');
+
+        const input = form?.querySelector('[name="image_url"]');
+        if (input) input.value = data.url;
+        refreshUploadPreviews(form);
+        setCategoryUploadStatus('Kategoriebild hochgeladen. Speichere danach die Kategorie.');
+    } catch (error) {
+        setCategoryUploadStatus(error.message, 'error');
     } finally {
         if (button) {
             button.disabled = false;
@@ -804,7 +857,13 @@ function openCategoryModal(id = null) {
             </div>
             <div class="form-group">
                 <label>Kategoriebild</label>
-                ${uploadBox('image_url', item.image_url || '', 'Kategoriebild ablegen', 'category')}
+                <input type="hidden" name="image_url" value="${escapeAttr(item.image_url || '')}">
+                <div class="category-upload-panel">
+                    <img class="category-upload-preview" data-image-preview="image_url" alt="">
+                    <input type="file" id="categoryImageFile" accept="image/png,image/jpeg,image/webp,image/gif">
+                    <button type="button" class="btn-sm secondary" data-action="upload-category-image">Kategoriebild hochladen</button>
+                    <p class="meta-line" id="categoryImageUploadStatus">PNG, JPG, WebP oder GIF bis 4 MB.</p>
+                </div>
             </div>
             <label><input type="checkbox" name="is_active" ${!id || item.is_active ? 'checked' : ''}> Aktiv</label>
             <div class="toolbar" style="margin-top: 1.5rem;">
@@ -813,7 +872,7 @@ function openCategoryModal(id = null) {
             </div>
         </form>
     `);
-    setupUploadZones(document.getElementById('modalContent'));
+    refreshUploadPreviews(document.getElementById('modalContent'));
     document.getElementById('categoryForm').addEventListener('submit', event => saveCategory(event, id));
 }
 
@@ -1043,6 +1102,7 @@ function handleDashboardAction(event) {
     if (action === 'open-media-picker') return openMediaPicker(trigger.dataset.input, trigger);
     if (action === 'clear-image-input') return clearImageInput(trigger.dataset.input, trigger);
     if (action === 'upload-hero-image') return uploadHeroImage();
+    if (action === 'upload-category-image') return uploadCategoryImage();
     if (action === 'upload-dish-image') return uploadDishImage();
     if (action === 'load-media-assets') return loadMediaAssets();
     if (action === 'toggle-closure') return toggleClosure(id, active);
