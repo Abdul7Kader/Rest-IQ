@@ -22,5 +22,8 @@
     "express": "^5.2.1",
     "express-session": "^1.19.0",
     "sharp": "^0.34.5"
+  },
+  "overrides": {
+    "qs": "6.15.2"
   }
 }
