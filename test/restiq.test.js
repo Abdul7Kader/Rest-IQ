@@ -499,6 +499,10 @@ test('image uploads require real allowed image signatures and matching MIME type
     const exportedData = JSON.parse(fs.readFileSync(exportedDataPath, 'utf8'));
     assert.equal(exportedData.siteConfig.hero.imageUrl, upload.body.url);
 
+    const cfExportedDataPath = path.join(__dirname, '..', 'cloudflare-export', slug, 'data.json');
+    const cfExportedData = JSON.parse(fs.readFileSync(cfExportedDataPath, 'utf8'));
+    assert.equal(cfExportedData.siteConfig.hero.imageUrl, upload.body.url);
+
     const restoreHeroImage = await request('PATCH', '/api/restaurant', {
         cookie: ownerCookie,
         headers: { 'X-CSRF-Token': token },

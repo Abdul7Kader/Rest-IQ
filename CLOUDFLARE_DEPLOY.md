@@ -47,6 +47,9 @@ trattoria-mario-restiq.pages.dev
 POST /api/restaurant/cf-prepare
 ```
 
+Das ist der offizielle Owner-Export-Endpunkt. Die fruehere lokale
+Publish-Route `/api/restaurant/publish` ist kein aktueller API-Vertrag.
+
 - Prüft: `current_plan = 'free'`
 - Rendert serverseitig das ViewModel aus der Datenbank
 - Erzeugt intern `publish/<slug>/`
