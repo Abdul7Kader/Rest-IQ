@@ -167,19 +167,30 @@ function setHeroUploadStatus(message, type = 'info') {
     status.style.color = type === 'error' ? '#dc2626' : 'var(--text-muted)';
 }
 
+function setDishUploadStatus(message, type = 'info') {
+    const status = document.getElementById('dishImageUploadStatus');
+    if (!status) return;
+    status.textContent = message;
+    status.style.color = type === 'error' ? '#dc2626' : 'var(--text-muted)';
+}
+
+function validateSelectedImage(file) {
+    if (!file) return 'Bitte zuerst ein Bild auswählen.';
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+        return 'Bitte nur PNG, JPG, WebP oder GIF hochladen.';
+    }
+    if (file.size > 4 * 1024 * 1024) {
+        return 'Das Bild ist zu groß. Maximal 4 MB.';
+    }
+    return '';
+}
+
 async function uploadHeroImage() {
     const fileInput = document.getElementById('heroImageFile');
     const file = fileInput?.files?.[0];
-    if (!file) {
-        setHeroUploadStatus('Bitte zuerst ein Bild auswählen.', 'error');
-        return;
-    }
-    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
-        setHeroUploadStatus('Bitte nur PNG, JPG, WebP oder GIF hochladen.', 'error');
-        return;
-    }
-    if (file.size > 4 * 1024 * 1024) {
-        setHeroUploadStatus('Das Bild ist zu groß. Maximal 4 MB.', 'error');
+    const validationError = validateSelectedImage(file);
+    if (validationError) {
+        setHeroUploadStatus(validationError, 'error');
         return;
     }
 
@@ -212,6 +223,52 @@ async function uploadHeroImage() {
         setHeroUploadStatus('Hero-Bild hochgeladen. Speichere danach das Design.');
     } catch (error) {
         setHeroUploadStatus(error.message, 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = oldText;
+        }
+    }
+}
+
+async function uploadDishImage() {
+    const form = document.getElementById('dishForm');
+    const fileInput = document.getElementById('dishImageFile');
+    const file = fileInput?.files?.[0];
+    const validationError = validateSelectedImage(file);
+    if (validationError) {
+        setDishUploadStatus(validationError, 'error');
+        return;
+    }
+
+    const button = document.querySelector('[data-action="upload-dish-image"]');
+    const oldText = button?.textContent;
+    if (button) {
+        button.disabled = true;
+        button.textContent = 'Lade hoch...';
+    }
+    setDishUploadStatus('Gerichtbild wird hochgeladen...');
+
+    try {
+        const res = await fetch('/api/uploads/image', {
+            method: 'POST',
+            headers: {
+                'Content-Type': file.type,
+                'X-Upload-Context': 'dish',
+                'X-Upload-Name': file.name || '',
+                'X-CSRF-Token': await getCsrfToken()
+            },
+            body: file
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Upload fehlgeschlagen.');
+
+        const input = form?.querySelector('[name="image_url"]');
+        if (input) input.value = data.url;
+        refreshUploadPreviews(form);
+        setDishUploadStatus('Gerichtbild hochgeladen. Speichere danach das Gericht.');
+    } catch (error) {
+        setDishUploadStatus(error.message, 'error');
     } finally {
         if (button) {
             button.disabled = false;
@@ -808,7 +865,13 @@ function openDishModal(id = null, categoryId = null) {
             </div>
             <div class="form-group">
                 <label>Gerichtbild</label>
-                ${uploadBox('image_url', dish.image_url || '', 'Gerichtbild ablegen', 'dish')}
+                <input type="hidden" name="image_url" value="${escapeAttr(dish.image_url || '')}">
+                <div class="dish-upload-panel">
+                    <img class="dish-upload-preview" data-image-preview="image_url" alt="">
+                    <input type="file" id="dishImageFile" accept="image/png,image/jpeg,image/webp,image/gif">
+                    <button type="button" class="btn-sm secondary" data-action="upload-dish-image">Gerichtbild hochladen</button>
+                    <p class="meta-line" id="dishImageUploadStatus">PNG, JPG, WebP oder GIF bis 4 MB.</p>
+                </div>
             </div>
             <label><input type="checkbox" name="is_active" ${!id || dish.is_active ? 'checked' : ''}> Aktiv</label>
             <div class="toolbar" style="margin-top: 1.5rem;">
@@ -817,7 +880,7 @@ function openDishModal(id = null, categoryId = null) {
             </div>
         </form>
     `);
-    setupUploadZones(document.getElementById('modalContent'));
+    refreshUploadPreviews(document.getElementById('modalContent'));
     document.getElementById('dishForm').addEventListener('submit', event => saveDish(event, id, catId));
 }
 
@@ -980,6 +1043,7 @@ function handleDashboardAction(event) {
     if (action === 'open-media-picker') return openMediaPicker(trigger.dataset.input, trigger);
     if (action === 'clear-image-input') return clearImageInput(trigger.dataset.input, trigger);
     if (action === 'upload-hero-image') return uploadHeroImage();
+    if (action === 'upload-dish-image') return uploadDishImage();
     if (action === 'load-media-assets') return loadMediaAssets();
     if (action === 'toggle-closure') return toggleClosure(id, active);
     if (action === 'delete-closure') return deleteClosure(id);
